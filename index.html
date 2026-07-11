@@ -117,24 +117,6 @@
                 </div>
             </div>
             
-            <!-- Controls / Mode Switcher -->
-            <div class="flex flex-wrap gap-2 items-center">
-                <!-- Mode Selector Buttons -->
-                <div class="bg-emerald-950/60 p-1 rounded-xl border border-emerald-800/40 flex shadow-inner">
-                    <button id="btn-mode-simulator" onclick="switchAppMode('simulator')" class="px-3.5 py-2 rounded-lg text-xs font-bold transition-all text-emerald-200 hover:text-white">
-                        🔌 Simulador de Dispositivos (3 Pantallas)
-                    </button>
-                    <button id="btn-mode-fullscreen" onclick="switchAppMode('fullscreen')" class="px-3.5 py-2 rounded-lg text-xs font-bold transition-all bg-[#198754] text-white">
-                        📱 App de Trabajo Única
-                    </button>
-                </div>
-                
-                <!-- Database Configuration Button -->
-                <button onclick="toggleConfigModal(true)" class="bg-[#198754] hover:bg-emerald-600 text-white border border-emerald-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow">
-                    <svg class="w-4 h-4 text-[#0dcaf0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    Bases de Datos (Gratis)
-                </button>
-            </div>
         </div>
     </header>
 
@@ -153,140 +135,10 @@
                 </span>
                 <div>
                     <p class="text-sm font-bold text-emerald-950" id="status-text">Base de datos de prueba para "Agua Verde" activa.</p>
-                    <p class="text-xs text-emerald-800/80">Puedes probar el traspaso entre sectores, el bloqueo por saldo negativo y justificaciones de mermas.</p>
+                    <p class="text-xs text-emerald-800/80">Los cambios del inventario se sincronizan automáticamente entre los dispositivos autorizados.</p>
                 </div>
             </div>
-            <button onclick="toggleConfigModal(true)" class="text-xs font-bold text-emerald-950 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 px-3.5 py-2 rounded-xl transition shrink-0">
-                🚀 Conectar Base de Datos Gratis (Supabase)
-            </button>
         </div>
-
-        <!-- SIMULATOR SECTION (SIDE-BY-SIDE DEVICES) -->
-        <section id="section-simulator" class="hidden flex-col gap-6 transition-all duration-300">
-            <!-- Instructions and Cheat Sheet -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs bg-emerald-900/5 p-4 rounded-2xl border border-emerald-900/10">
-                <div class="flex items-start gap-2.5">
-                    <span class="bg-emerald-800 text-white w-5 h-5 rounded-full flex items-center justify-center font-extrabold shrink-0">1</span>
-                    <div>
-                        <strong class="text-emerald-950 block">Dueño (Roberto - DUE12)</strong>
-                        <span class="text-slate-600">Tiene acceso total. Cambia el nombre de la app, agrega sectores, descarga Excel y purga el histórico de auditoría secreto.</span>
-                    </div>
-                </div>
-                <div class="flex items-start gap-2.5">
-                    <span class="bg-[#198754] text-white w-5 h-5 rounded-full flex items-center justify-center font-extrabold shrink-0">2</span>
-                    <div>
-                        <strong class="text-emerald-950 block">Administrador (Clara - ADM11)</strong>
-                        <span class="text-slate-600">Maneja 1. Cocina Restaurant. Traspasa carne a la Parrilla, copia stock, genera códigos de 4-6 chars y los comparte.</span>
-                    </div>
-                </div>
-                <div class="flex items-start gap-2.5">
-                    <span class="bg-[#0dcaf0] text-emerald-950 w-5 h-5 rounded-full flex items-center justify-center font-extrabold shrink-0">3</span>
-                    <div>
-                        <strong class="text-emerald-950 block">Personal (Mateo - STF11)</strong>
-                        <span class="text-slate-600">Mateo opera en Cocina. Carga mercadería (elige kg o u), actualiza stock. Bloqueado si el stock queda en negativo.</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- The Grid of Devices -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                
-                <!-- DEVICE 1: LAPTOP / TABLET VIEW (OWNER) - TAKES 5 COLS -->
-                <div class="lg:col-span-5 flex flex-col gap-2">
-                    <div class="flex justify-between items-center px-1 select-none">
-                        <span class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                            💻 Monitor de Auditoría Secreta (PC Dueño)
-                        </span>
-                        <span class="text-[10px] bg-emerald-100 text-emerald-950 font-bold px-2 py-0.5 rounded-lg border border-emerald-200">Acceso: DUE12</span>
-                    </div>
-                    
-                    <div class="bg-white border-4 border-slate-300 rounded-2xl shadow-xl overflow-hidden min-h-[670px] flex flex-col">
-                        <!-- Simulated PC Browser bar -->
-                        <div class="bg-slate-100 border-b border-slate-200 px-4 py-2 flex items-center gap-2 text-xs text-slate-500 select-none">
-                            <div class="flex gap-1.5">
-                                <span class="w-3 h-3 rounded-full bg-red-400"></span>
-                                <span class="w-3 h-3 rounded-full bg-yellow-400"></span>
-                                <span class="w-3 h-3 rounded-full bg-green-400"></span>
-                            </div>
-                            <div class="bg-white px-3 py-0.5 rounded border border-slate-200 flex-grow text-[10px] text-center truncate font-mono">
-                                https://agua-verde.chacra/admin/audit-logs
-                            </div>
-                        </div>
-                        
-                        <!-- PC Workspace screen content -->
-                        <div id="screen-owner" class="flex-grow flex flex-col h-[610px] overflow-y-auto">
-                            <!-- Rendered Dynamically -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- DEVICE 2: IPHONE FRAME (ADMIN COCO) - TAKES 3.5 COLS -->
-                <div class="lg:col-span-3.5 flex flex-col gap-2">
-                    <div class="flex justify-between items-center px-1 select-none">
-                        <span class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                            🍎 iPhone Administrador (Sectorizado)
-                        </span>
-                        <span class="text-[10px] bg-emerald-100 text-emerald-950 font-bold px-2 py-0.5 rounded-lg border border-emerald-200">Acceso: ADM11</span>
-                    </div>
-                    
-                    <div class="phone-frame w-full max-w-[340px] mx-auto h-[670px]">
-                        <div class="phone-notch"></div>
-                        <div class="phone-home-indicator"></div>
-                        
-                        <!-- iOS status bar -->
-                        <div class="bg-emerald-950 text-white text-[9px] px-5 pt-4.5 pb-1 flex justify-between items-center font-semibold select-none">
-                            <span>09:41 AM</span>
-                            <div class="flex gap-1 items-center font-bold">
-                                <span>WiFi</span>
-                                <span>LTE</span>
-                                <span class="border border-white/40 px-1 py-0.2 rounded text-[8px] bg-[#198754]">100%</span>
-                            </div>
-                        </div>
-                        
-                        <!-- iPhone Content Space -->
-                        <div id="screen-admin" class="h-[590px] overflow-y-auto bg-slate-50 flex flex-col text-xs pb-6">
-                            <!-- Rendered Dynamically -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- DEVICE 3: ANDROID FRAME (STAFF COCO) - TAKES 3.5 COLS -->
-                <div class="lg:col-span-3.5 flex flex-col gap-2">
-                    <div class="flex justify-between items-center px-1 select-none">
-                        <span class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                            🤖 Celular Personal (Android Staff)
-                        </span>
-                        <span class="text-[10px] bg-emerald-100 text-emerald-950 font-bold px-2 py-0.5 rounded-lg border border-emerald-200">Acceso: STF11</span>
-                    </div>
-                    
-                    <div class="phone-frame w-full max-w-[340px] mx-auto h-[670px]">
-                        <div class="android-punch"></div>
-                        
-                        <!-- Android System bar -->
-                        <div class="android-bar font-bold select-none">
-                            <span class="lbl-dyn-appname">🌿 Agua Verde</span>
-                            <div class="flex gap-1 items-center text-[8px]">
-                                <span>95%</span>
-                                <span>09:41</span>
-                            </div>
-                        </div>
-                        
-                        <!-- Android Content Space -->
-                        <div id="screen-staff" class="h-[602px] overflow-y-auto bg-slate-50 flex flex-col text-xs pb-12">
-                            <!-- Rendered Dynamically -->
-                        </div>
-                        
-                        <!-- Android bottom buttons mockup -->
-                        <div class="absolute bottom-0 left-0 right-0 h-10 bg-emerald-950 flex justify-around items-center text-emerald-500 text-xs select-none border-t border-emerald-900">
-                            <span class="w-3.5 h-3.5 border-2 border-emerald-700 rounded-sm"></span>
-                            <span class="w-3.5 h-3.5 border-2 border-emerald-700 rounded-full"></span>
-                            <span class="text-base font-bold text-emerald-700">◁</span>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </section>
 
         <!-- FULL SCREEN INDIVIDUAL APP SECTION -->
         <section id="section-fullscreen" class="flex flex-col gap-6 max-w-md mx-auto w-full transition-all duration-300">
@@ -310,73 +162,6 @@
         </section>
 
     </main>
-
-
-    <!-- DATABASE CONFIGURATION MODAL -->
-    <div id="modal-config" class="fixed inset-0 bg-black/70 z-55 flex items-center justify-center p-4 hidden backdrop-blur-sm">
-        <div class="bg-white rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden border border-emerald-950/25 animate-pop-up">
-            <!-- Modal Header -->
-            <div class="bg-[#0d3a22] text-white p-5 flex justify-between items-center border-b-2 border-[#0dcaf0]/20">
-                <div class="flex items-center gap-2">
-                    <span class="text-2xl">⚡</span>
-                    <div>
-                        <h3 class="font-extrabold text-lg">Base de Datos en Tiempo Real</h3>
-                        <p class="text-xs text-emerald-300">Conecta tu plan gratuito de Supabase</p>
-                    </div>
-                </div>
-                <button onclick="toggleConfigModal(false)" class="text-emerald-300 hover:text-white font-bold text-2xl leading-none">&times;</button>
-            </div>
-            
-            <!-- Modal Body -->
-            <div class="p-6 space-y-4 text-xs max-h-[420px] overflow-y-auto">
-                <div class="bg-emerald-50 border border-emerald-100 text-emerald-950 p-3.5 rounded-2xl flex gap-2.5">
-                    <span class="text-lg">✨</span>
-                    <p class="leading-relaxed font-semibold">
-                        Para habilitar la app en teléfonos reales en tu chacra, debes conectarla a una base de datos. <strong>Supabase</strong> es una opción gratuita y súper rápida que se configura en minutos.
-                    </p>
-                </div>
-                
-                <!-- Credentials Form -->
-                <div class="space-y-3.5">
-                    <div>
-                        <label class="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">Supabase Project URL</label>
-                        <input type="text" id="input-sb-url" placeholder="https://xxxxxxxxxxxxxxxxxxxx.supabase.co" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#198754]">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">Supabase Anon Public Key</label>
-                        <input type="password" id="input-sb-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#198754]">
-                    </div>
-                </div>
-
-                <div class="border-t border-slate-100 pt-3">
-                    <h4 class="font-bold text-slate-800 uppercase mb-1.5 flex items-center gap-1">
-                        <span>📋</span> Pasos Rápidos de Inicialización:
-                    </h4>
-                    <ol class="text-slate-600 list-decimal pl-4 space-y-1.5">
-                        <li>Crea un proyecto gratis en <a href="https://supabase.com" target="_blank" class="text-emerald-700 font-bold underline">supabase.com</a>.</li>
-                        <li>Entra a la sección <strong>SQL Editor</strong> -> haz clic en <strong>New Query</strong>.</li>
-                        <li>Copia el contenido del archivo <code class="font-mono text-emerald-900 bg-emerald-100/60 px-1 rounded">supabase_schema.sql</code>, pégalo allí y dale a <strong>Run</strong>.</li>
-                        <li>Ve a <strong>Project Settings</strong> (engranaje) -> <strong>API</strong> para obtener tus claves "Project URL" y "Anon Key" y pégalas aquí arriba.</li>
-                    </ol>
-                </div>
-            </div>
-
-            <!-- Modal Footer -->
-            <div class="bg-slate-50 px-6 py-4 flex justify-between items-center border-t border-slate-100">
-                <button onclick="clearSupabaseConfig()" class="text-xs font-bold text-red-600 hover:underline">
-                    ❌ Limpiar Credenciales (Volver a Demo)
-                </button>
-                <div class="flex gap-2">
-                    <button onclick="toggleConfigModal(false)" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold hover:bg-slate-300">
-                        Cancelar
-                    </button>
-                    <button onclick="saveSupabaseConfig()" class="bg-[#0f5132] hover:bg-emerald-800 text-white px-4 py-2 rounded-xl font-bold shadow-md transition">
-                        Guardar y Conectar ⚡
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
 
 
     <!-- JAVASCRIPT APPLICATION CODE -->
@@ -467,8 +252,6 @@
         window.addEventListener('DOMContentLoaded', () => {
             initSupabaseClient();
             loadSettings();
-            // Iniciar directamente en modo App de Trabajo Única
-            switchAppMode('fullscreen');
             renderAllScreens();
 
             // Realtime simulation listeners
@@ -1162,9 +945,6 @@
         // ==========================================
 
         function renderAllScreens() {
-            renderOwnerScreen();
-            renderAdminScreen();
-            renderStaffScreen();
             renderFullscreenScreen();
         }
 
@@ -1774,15 +1554,6 @@
                             </button>
                         </div>
 
-                        <!-- Cheat Sheet -->
-                        <div class="bg-amber-50 border border-amber-100 rounded-2xl p-3 text-[10px] text-amber-900 w-full max-w-sm text-center space-y-1.5 select-none">
-                            <p class="font-bold">🔑 Clic para autocompletar prueba rápida:</p>
-                            <div class="flex flex-wrap justify-center gap-1 font-mono font-bold text-[9px]">
-                                <span onclick="quickFillLogin('Roberto', 'Dueño', 'DUE12')" class="bg-amber-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-amber-300 border border-amber-300">DUE12 (Dueño)</span>
-                                <span onclick="quickFillLogin('Clara', 'Gómez', 'ADM11')" class="bg-amber-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-amber-300 border border-amber-300">ADM11 (Admin)</span>
-                                <span onclick="quickFillLogin('Mateo', 'Ruiz', 'STF11')" class="bg-amber-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-amber-300 border border-amber-300">STF11 (Personal)</span>
-                            </div>
-                        </div>
                     </div>
                 `;
                 return;
@@ -2784,18 +2555,6 @@
             activeSessions.fullscreen = session;
             renderFullscreenScreen();
             showToast("Ingreso Exitoso", `Bienvenido/a ${session.name}. Has accedido como ${session.role.toUpperCase()}.`, "success");
-        }
-
-        function quickFillLogin(first, last, code) {
-            const inputFirst = document.getElementById('fs-login-first');
-            const inputLast = document.getElementById('fs-login-last');
-            const inputCode = document.getElementById('fs-login-code');
-
-            if (inputFirst) inputFirst.value = first;
-            if (inputLast) inputLast.value = last;
-            if (inputCode) inputCode.value = code;
-
-            showToast("Datos precargados", `Código ${code} listo para validar. Presiona "Ingresar al Sistema".`, "info");
         }
 
         function handleFullscreenLogout() {
