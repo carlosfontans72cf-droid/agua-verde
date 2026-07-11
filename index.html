@@ -97,6 +97,15 @@
         .animate-pop-up {
             animation: popUp 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
+        input, textarea {
+            -webkit-user-select: text;
+            user-select: text;
+        }
+        @media (max-width: 640px) {
+            input, select, textarea {
+                font-size: 16px !important;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -976,7 +985,7 @@
                 </div>
 
                 <!-- Navigation Tabs -->
-                <div class="bg-slate-50 border-b border-slate-200 px-4 flex gap-4 text-xs font-bold shrink-0 select-none">
+                <div class="bg-slate-50 border-b border-slate-200 px-4 flex gap-4 text-xs font-bold shrink-0 select-none overflow-x-auto whitespace-nowrap">
                     <button onclick="setTab('owner', 'inventory')" class="py-2.5 ${tab === 'inventory' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
                         📦 Inventario
                     </button>
@@ -1036,7 +1045,7 @@
                     </div>
 
                     <!-- Items Table -->
-                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-sm">
                         <table class="w-full text-xs text-left">
                             <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[9px] font-bold select-none">
                                 <tr>
@@ -1192,7 +1201,7 @@
                         </button>
                     </div>
 
-                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-sm">
                         <table class="w-full text-xs text-left">
                             <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[9px] font-bold select-none">
                                 <tr>
@@ -1250,7 +1259,7 @@
                         </div>
                     </div>
 
-                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-sm">
                         <table class="w-full text-xs text-left">
                             <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[9px] font-bold select-none">
                                 <tr>
@@ -1524,6 +1533,12 @@
 
             const session = activeSessions.fullscreen;
             const db = getMockDb();
+            const fullscreenSection = document.getElementById('section-fullscreen');
+            const ownerMode = session?.role === 'owner';
+            if (fullscreenSection) {
+                fullscreenSection.classList.toggle('max-w-md', !ownerMode);
+                fullscreenSection.classList.toggle('max-w-6xl', ownerMode);
+            }
 
             // 1. LOGIN REQUIRED STATE
             if (!session) {
@@ -1673,56 +1688,17 @@
                 html += `</div>`;
             }
 
-            // FULLSCREEN OWNER INTERFACE
+            // FULLSCREEN OWNER INTERFACE — COMPLETE MANAGEMENT PANEL
             if (session.role === 'owner') {
-                html += `
-                    <div class="grid grid-cols-2 gap-2 text-center select-none font-bold">
-                        <button onclick="openAddMerchModal('fullscreen')" class="bg-[#198754] hover:bg-[#0f5132] text-white text-[10px] py-2.5 rounded-xl transition shadow">
-                            ➕ Cargar Mercadería
-                        </button>
-                        <button onclick="openAddCodeModal('fullscreen')" class="bg-slate-800 hover:bg-slate-700 text-white text-[10px] py-2.5 rounded-xl transition shadow">
-                            🔑 Registrar Clave
-                        </button>
-                    </div>
-
-                    <div class="space-y-2">
-                        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200 pb-1">Inventario Global de Agua Verde</div>
-                `;
-
-                if (activeItems.length === 0) {
-                    html += `<div class="p-6 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">No hay artículos registrados en la chacra.</div>`;
-                } else {
-                    activeItems.forEach(item => {
-                        const secName = db.sectors.find(s => s.id === item.sector_id)?.name || 'Desconocido';
-                        html += `
-                            <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-1.5 animate-pop-up">
-                                <div>
-                                    <div class="flex items-center gap-1 flex-wrap">
-                                        <h5 class="font-extrabold text-xs text-slate-800">${item.name}</h5>
-                                        <span class="text-[8px] bg-emerald-100 text-emerald-850 px-1 py-0.2 rounded font-semibold">${secName}</span>
-                                    </div>
-                                    <div class="text-xs font-bold text-emerald-850 mt-1">${item.quantity} ${item.unit}</div>
-                                </div>
-                                <div class="flex items-center gap-1.5 select-none">
-                                    <div class="flex items-center bg-slate-100 rounded border border-slate-200 overflow-hidden font-bold">
-                                        <button onclick="promptReasonAndAdjust('${item.id}', -1, 'fullscreen')" class="bg-white px-2 py-1 text-xs text-slate-700 border-r border-slate-200">-</button>
-                                        <span class="px-2 py-0.5 text-xs text-slate-855 min-w-[15px] text-center">${item.quantity}</span>
-                                        <button onclick="adjustStock('${item.id}', 1, 'fullscreen')" class="bg-white px-2 py-1 text-xs text-slate-700 border-l border-slate-200">+</button>
-                                    </div>
-                                    <button onclick="openTransferModal('${item.id}', 'fullscreen')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-1.5 rounded-lg font-bold text-[9px]">🔄</button>
-                                    <button onclick="deleteItem('${item.id}', 'fullscreen')" class="bg-red-50 hover:bg-red-100 text-red-650 p-1.5 rounded-lg transition">
-                                        🗑️
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-                html += `</div>`;
+                activeSessions.owner = session;
+                html += `<div id="screen-owner" class="owner-panel -m-4 min-h-[560px] flex flex-col"></div>`;
             }
 
             html += `</div>`;
             container.innerHTML = html;
+            if (session.role === 'owner') {
+                await renderOwnerScreen();
+            }
         }
 
         // ==========================================
@@ -2249,10 +2225,10 @@
             }
 
             const modal = document.createElement('div');
-            modal.className = "fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+            modal.className = "fixed inset-0 bg-black/70 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto backdrop-blur-sm animate-pop-up";
             modal.id = "dynamic-modal";
             modal.innerHTML = `
-                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-200">
+                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[calc(100dvh-2rem)] overflow-y-auto border border-slate-200">
                     <div class="bg-[#0f5132] text-white p-4 font-bold flex justify-between items-center border-b border-[#0dcaf0]/20">
                         <h4 class="text-sm font-serif">Registrar Stock</h4>
                         <button onclick="document.getElementById('dynamic-modal').remove()" class="text-white hover:text-red-300 font-bold text-lg leading-none">&times;</button>
@@ -2260,13 +2236,14 @@
                     <div class="p-4 space-y-3.5 text-xs">
                         ${sectorSection}
                         
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre del Producto</label>
-                            
-                            <select id="select-existing-items" onchange="handleExistingItemSelectChange(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none font-bold text-slate-700 mb-2">
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-bold uppercase text-slate-500">Artículo existente (opcional)</label>
+                            <select id="select-existing-items" onchange="handleExistingItemSelectChange(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none font-bold text-slate-700">
                             </select>
 
-                            <input type="text" id="new-merch-name" placeholder="Escribe el nombre del artículo nuevo..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 focus:ring-1 focus:ring-emerald-700 outline-none font-bold hidden">
+                            <label for="new-merch-name" class="block text-[10px] font-bold uppercase text-slate-500 pt-1">Nombre del artículo nuevo</label>
+                            <input type="text" id="new-merch-name" name="new-merch-name" autocomplete="off" autocapitalize="sentences" enterkeyhint="next" placeholder="Ej.: Azúcar, arroz, detergente..." class="w-full bg-white border-2 border-emerald-300 rounded-xl px-3 py-3 focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 outline-none font-bold text-slate-900">
+                            <p id="new-merch-name-help" class="text-[9px] text-slate-500">Escribí aquí para crear un artículo, o elegí uno existente arriba para sumarle cantidad.</p>
                         </div>
 
                         <div class="grid grid-cols-2 gap-2">
@@ -2296,10 +2273,13 @@
 
             document.getElementById('btn-submit-new-merch').onclick = async () => {
                 const selectElement = document.getElementById('select-existing-items');
-                let name = selectElement.value;
-                
-                if (name === "__CREATE_NEW__") {
-                    name = document.getElementById('new-merch-name').value;
+                const nameInput = document.getElementById('new-merch-name');
+                let name = (selectElement.value || nameInput.value).trim();
+
+                if (!name) {
+                    showToast("Falta el artículo", "Escribí el nombre del artículo o seleccioná uno existente.", "warning");
+                    nameInput.focus();
+                    return;
                 }
 
                 const qtyVal = document.getElementById('new-merch-quantity').value;
@@ -2326,49 +2306,64 @@
             };
         }
 
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
         function loadSectorItemDropdown(sectorId) {
             const select = document.getElementById('select-existing-items');
-            if (!select) return;
+            const nameInput = document.getElementById('new-merch-name');
+            const unitSelect = document.getElementById('new-merch-unit');
+            if (!select || !nameInput || !unitSelect) return;
 
             const db = getMockDb();
-            const items = db.merchandise.filter(m => m.sector_id === sectorId && m.active);
-            
-            let optionsHtml = '';
-            if (items.length === 0) {
-                optionsHtml = `<option value="__CREATE_NEW__">➕ [Registrar artículo nuevo...]</option>`;
-                document.getElementById('new-merch-name').classList.remove('hidden');
-            } else {
-                optionsHtml = `<option value="">-- Seleccionar artículo existente --</option>`;
-                items.forEach(i => {
-                    optionsHtml += `<option value="${i.name}">📦 ${i.name} (${i.unit})</option>`;
-                });
-                optionsHtml += `<option value="__CREATE_NEW__">➕ [Registrar otro artículo nuevo...]</option>`;
-                document.getElementById('new-merch-name').classList.add('hidden');
-            }
+            const items = db.merchandise
+                .filter(m => m.sector_id === sectorId && m.active)
+                .sort((a, b) => a.name.localeCompare(b.name));
 
+            let optionsHtml = `<option value="">➕ Crear un artículo nuevo</option>`;
+            items.forEach(i => {
+                optionsHtml += `<option value="${escapeHtml(i.name)}">📦 ${escapeHtml(i.name)} (${i.unit})</option>`;
+            });
             select.innerHTML = optionsHtml;
+            nameInput.readOnly = false;
+            nameInput.value = '';
+            nameInput.classList.remove('bg-slate-100', 'text-slate-500');
+            nameInput.classList.add('bg-white', 'text-slate-900');
+            unitSelect.disabled = false;
         }
 
         function handleExistingItemSelectChange(value) {
             const nameInput = document.getElementById('new-merch-name');
             const unitSelect = document.getElementById('new-merch-unit');
+            const sectorId = document.getElementById('new-merch-sector')?.value;
+            if (!nameInput || !unitSelect) return;
 
-            if (value === "__CREATE_NEW__") {
-                nameInput.classList.remove('hidden');
+            if (!value) {
+                nameInput.readOnly = false;
                 nameInput.value = '';
+                nameInput.classList.remove('bg-slate-100', 'text-slate-500');
+                nameInput.classList.add('bg-white', 'text-slate-900');
                 unitSelect.disabled = false;
-            } else if (value === "") {
-                nameInput.classList.add('hidden');
-                unitSelect.disabled = false;
-            } else {
-                nameInput.classList.add('hidden');
-                const db = getMockDb();
-                const matched = db.merchandise.find(m => m.name.toLowerCase() === value.toLowerCase() && m.active);
-                if (matched) {
-                    unitSelect.value = matched.unit;
-                    unitSelect.disabled = true;
-                }
+                setTimeout(() => nameInput.focus(), 50);
+                return;
             }
+
+            const db = getMockDb();
+            const matched = db.merchandise.find(m =>
+                m.sector_id === sectorId && m.name.toLowerCase() === value.toLowerCase() && m.active
+            );
+            nameInput.value = matched?.name || value;
+            nameInput.readOnly = true;
+            nameInput.classList.remove('bg-white', 'text-slate-900');
+            nameInput.classList.add('bg-slate-100', 'text-slate-500');
+            if (matched) unitSelect.value = matched.unit;
+            unitSelect.disabled = true;
         }
 
         async function openAddCodeModal(screenContext) {
