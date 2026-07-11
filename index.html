@@ -461,9 +461,25 @@
             return null;
         }
 
+        function assignedPersonName(value) {
+            return String(value || '')
+                .replace(/\s*\((dueño|dueno|owner|admin|administrador|personal|staff)\)\s*$/i, '')
+                .trim();
+        }
+
+        function normalizePersonName(value) {
+            return assignedPersonName(value)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ' ')
+                .trim()
+                .replace(/\s+/g, ' ');
+        }
+
         async function db_validateCode(code, inputFirstName, inputLastName) {
             const cleanCode = code.trim().toUpperCase();
-            const fullName = `${inputFirstName.trim()} ${inputLastName.trim()}`;
+            const enteredName = `${inputFirstName.trim()} ${inputLastName.trim()}`;
 
             if (isLiveSupabase && supabaseClient) {
                 const { data, error } = await supabaseClient
@@ -472,31 +488,41 @@
                     .eq('code', cleanCode)
                     .eq('active', true)
                     .single();
-                
+
                 if (error || !data) return null;
+                const registeredName = assignedPersonName(data.name);
+                if (normalizePersonName(enteredName) !== normalizePersonName(registeredName)) {
+                    return { error: 'name_mismatch' };
+                }
+                const parts = registeredName.split(/\s+/);
                 return {
                     code: data.code,
-                    name: fullName,
-                    first_name: inputFirstName,
-                    last_name: inputLastName,
+                    name: registeredName,
+                    first_name: parts[0] || '',
+                    last_name: parts.slice(1).join(' '),
                     role: data.role,
                     sector_id: data.sector_id,
                     can_view_all: data.can_view_all
                 };
-            } else {
-                const db = getMockDb();
-                const found = db.access_codes.find(c => c.code.toUpperCase() === cleanCode && c.active);
-                if (!found) return null;
-                return {
-                    code: found.code,
-                    name: fullName,
-                    first_name: inputFirstName,
-                    last_name: inputLastName,
-                    role: found.role,
-                    sector_id: found.sector_id,
-                    can_view_all: found.can_view_all
-                };
             }
+
+            const db = getMockDb();
+            const found = db.access_codes.find(c => c.code.toUpperCase() === cleanCode && c.active);
+            if (!found) return null;
+            const registeredName = assignedPersonName(found.name);
+            if (normalizePersonName(enteredName) !== normalizePersonName(registeredName)) {
+                return { error: 'name_mismatch' };
+            }
+            const parts = registeredName.split(/\s+/);
+            return {
+                code: found.code,
+                name: registeredName,
+                first_name: parts[0] || '',
+                last_name: parts.slice(1).join(' '),
+                role: found.role,
+                sector_id: found.sector_id,
+                can_view_all: found.can_view_all
+            };
         }
 
         async function db_getSectors() {
@@ -1806,6 +1832,7 @@
             } else {
                 activeItems = db.merchandise.filter(m => m.sector_id === session.sector_id && m.active);
             }
+            const lowStockItems = activeItems.filter(item => Number(item.quantity) <= Number(systemSettings.low_stock_threshold));
 
             html = `
                 <!-- Logged Header -->
@@ -1870,6 +1897,21 @@
                         </button>
                     </div>
 
+                    ${lowStockItems.length ? `
+                        <div class="bg-red-50 border-2 border-red-300 rounded-2xl p-3 text-red-900 shadow-sm">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="font-extrabold text-xs">⚠️ ALERTA DE BAJO STOCK</div>
+                                <span class="bg-red-600 text-white rounded-full px-2 py-0.5 text-[9px] font-bold">${lowStockItems.length}</span>
+                            </div>
+                            <p class="text-[9px] mt-1">Mínimo configurado: ${systemSettings.low_stock_threshold}. Reponer:</p>
+                            <div class="flex flex-wrap gap-1 mt-2">
+                                ${lowStockItems.map(item => `<span class="bg-white border border-red-200 rounded-lg px-2 py-1 text-[9px] font-bold">${escapeHtml(item.name)}: ${item.quantity} ${item.unit}</span>`).join('')}
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-emerald-800 text-[10px] font-bold text-center">✅ Stock dentro de niveles normales</div>
+                    `}
+
                     <div class="bg-white border border-slate-200 p-2.5 rounded-xl flex items-center justify-around gap-1.5 text-center select-none font-bold">
                         <button onclick="handleCopyStockText('${session.sector_id}')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] py-1.5 rounded-lg transition">
                             📋 Copiar Stock
@@ -1887,11 +1929,13 @@
                     html += `<div class="p-6 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">No hay artículos registrados.</div>`;
                 } else {
                     activeItems.forEach(item => {
+                        const isLow = Number(item.quantity) <= Number(systemSettings.low_stock_threshold);
                         html += `
-                            <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-1.5 animate-pop-up">
+                            <div class="bg-white border ${isLow ? 'border-red-300 ring-1 ring-red-100' : 'border-slate-200'} rounded-xl p-3 shadow-sm flex justify-between items-center gap-1.5 animate-pop-up">
                                 <div>
-                                    <h5 class="font-extrabold text-xs text-slate-800">${item.name}</h5>
-                                    <div class="text-xs font-bold text-emerald-800 mt-0.5">${item.quantity} ${item.unit}</div>
+                                    <h5 class="font-extrabold text-xs text-slate-800">${escapeHtml(item.name)}</h5>
+                                    <div class="text-xs font-bold ${isLow ? 'text-red-700' : 'text-emerald-800'} mt-0.5">${item.quantity} ${item.unit}</div>
+                                    ${isLow ? '<span class="inline-block bg-red-100 text-red-700 rounded px-1.5 py-0.5 mt-1 text-[8px] font-extrabold">⚠️ BAJO STOCK</span>' : ''}
                                 </div>
                                 <div class="flex items-center gap-1.5 select-none">
                                     <div class="flex items-center bg-slate-100 rounded border border-slate-200 overflow-hidden font-bold">
@@ -2857,6 +2901,10 @@
 
             if (!session) {
                 showToast("Código Inválido", "El código ingresado no es válido o está desactivado. Verifica con tu administrador.", "error");
+                return;
+            }
+            if (session.error === 'name_mismatch') {
+                showToast("Nombre incorrecto", "El nombre y apellido no coinciden con la persona asignada a este código.", "error");
                 return;
             }
 
