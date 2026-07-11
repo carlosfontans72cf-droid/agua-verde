@@ -254,6 +254,8 @@
 
         let ownerSelectedSectorFilter = 'all';
         let currentAppDisplayMode = 'fullscreen';
+        let latestSyncRequest = 0;
+        let realtimeSyncTimer = null;
 
         // ==========================================
         // APP INITIALIZATION
@@ -269,6 +271,14 @@
                 loadSettings();
                 renderAllScreens();
             });
+
+            window.addEventListener('focus', () => scheduleSupabaseSync(0));
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) scheduleSupabaseSync(0);
+            });
+            setInterval(() => {
+                if (!document.hidden) scheduleSupabaseSync(0);
+            }, 30000);
         });
 
         // Load Settings from Local/Supabase config
@@ -359,13 +369,13 @@
             if (!supabaseClient) return;
 
             supabaseClient.channel('agua-verde-channel-pro')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'merchandise' }, () => fetchAndSyncFromSupabase())
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_history' }, () => fetchAndSyncFromSupabase())
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'access_codes' }, () => fetchAndSyncFromSupabase())
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'sectors' }, () => fetchAndSyncFromSupabase())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'merchandise' }, () => scheduleSupabaseSync())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_history' }, () => scheduleSupabaseSync())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'access_codes' }, () => scheduleSupabaseSync())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'sectors' }, () => scheduleSupabaseSync())
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
                     loadSettings();
-                    fetchAndSyncFromSupabase();
+                    scheduleSupabaseSync();
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') {
@@ -374,27 +384,44 @@
                 });
         }
 
+        function scheduleSupabaseSync(delay = 250) {
+            clearTimeout(realtimeSyncTimer);
+            realtimeSyncTimer = setTimeout(() => fetchAndSyncFromSupabase(), delay);
+        }
+
         async function fetchAndSyncFromSupabase() {
-            if (!isLiveSupabase || !supabaseClient) return;
+            if (!isLiveSupabase || !supabaseClient) return false;
+            const requestId = ++latestSyncRequest;
 
             try {
-                const { data: sectors } = await supabaseClient.from('sectors').select('*').order('name', { ascending: true });
-                const { data: access_codes } = await supabaseClient.from('access_codes').select('*');
-                const { data: merchandise } = await supabaseClient.from('merchandise').select('*');
-                const { data: history } = await supabaseClient.from('inventory_history').select('*').order('created_at', { ascending: false });
+                const [sectorsResult, codesResult, merchResult, historyResult] = await Promise.all([
+                    supabaseClient.from('sectors').select('*').order('name', { ascending: true }),
+                    supabaseClient.from('access_codes').select('*'),
+                    supabaseClient.from('merchandise').select('*'),
+                    supabaseClient.from('inventory_history').select('*').order('created_at', { ascending: false })
+                ]);
 
-                let dbObj = {
-                    sectors: sectors || [],
-                    access_codes: access_codes || [],
-                    merchandise: merchandise || [],
-                    inventory_history: history || []
+                // Prevent an older, slower request from overwriting fresher data.
+                if (requestId !== latestSyncRequest) return false;
+
+                const current = getMockDb();
+                const results = [sectorsResult, codesResult, merchResult, historyResult];
+                const errors = results.map(r => r.error).filter(Boolean);
+                errors.forEach(error => console.error('Error parcial de sincronización Supabase:', error));
+
+                const dbObj = {
+                    sectors: sectorsResult.error ? current.sectors : (sectorsResult.data || []),
+                    access_codes: codesResult.error ? current.access_codes : (codesResult.data || []),
+                    merchandise: merchResult.error ? current.merchandise : (merchResult.data || []),
+                    inventory_history: historyResult.error ? current.inventory_history : (historyResult.data || [])
                 };
 
                 localStorage.setItem('agua_verde_db_pro', JSON.stringify(dbObj));
                 renderAllScreens();
-                
+                return errors.length === 0;
             } catch (err) {
-                console.error("Error en sincronización Supabase:", err);
+                console.error('Error en sincronización Supabase:', err);
+                return false;
             }
         }
 
@@ -402,6 +429,37 @@
         // ==========================================
         // DATABASE WRAPPER API (PRO FEATURES)
         // ==========================================
+
+        function createUuid() {
+            if (crypto?.randomUUID) return crypto.randomUUID();
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0;
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            });
+        }
+
+        async function db_insertAuditLog(logData, retries = 3) {
+            if (!isLiveSupabase || !supabaseClient) return null;
+            const payload = { id: logData.id || createUuid(), ...logData };
+            let lastError = null;
+
+            for (let attempt = 1; attempt <= retries; attempt++) {
+                const { data, error } = await supabaseClient
+                    .from('inventory_history')
+                    .insert([payload])
+                    .select()
+                    .single();
+                if (!error) return data;
+                // A duplicated UUID means a previous timed-out request actually succeeded.
+                if (error.code === '23505') return payload;
+                lastError = error;
+                if (attempt < retries) await new Promise(resolve => setTimeout(resolve, 350 * attempt));
+            }
+
+            console.error('No se pudo guardar la auditoría:', lastError);
+            showToast('Auditoría no guardada', 'La operación fue detenida para no dejar el inventario sin registro.', 'error');
+            return null;
+        }
 
         async function db_validateCode(code, inputFirstName, inputLastName) {
             const cleanCode = code.trim().toUpperCase();
@@ -453,6 +511,8 @@
 
             const oldQty = parseFloat(original.quantity);
             const newQty = oldQty + delta;
+            const previousUpdatedBy = original.updated_by;
+            const previousUpdatedAt = original.updated_at;
 
             // 1. BLOCK NEGATIVE STOCKS
             if (newQty < 0) {
@@ -493,7 +553,7 @@
                     return false;
                 }
 
-                await supabaseClient.from('inventory_history').insert([{
+                const auditSaved = await db_insertAuditLog({
                     merchandise_id: merchId,
                     sector_id: original.sector_id,
                     sector_name: sectorName,
@@ -501,12 +561,21 @@
                     action: 'update',
                     quantity_before: oldQty,
                     quantity_after: newQty,
-                    details: details,
+                    details,
                     user_code: userSession.code,
                     user_name: userSession.name
-                }]);
+                });
 
-                fetchAndSyncFromSupabase();
+                if (!auditSaved) {
+                    await supabaseClient.from('merchandise').update({
+                        quantity: oldQty,
+                        updated_by: previousUpdatedBy,
+                        updated_at: previousUpdatedAt
+                    }).eq('id', merchId);
+                    await fetchAndSyncFromSupabase();
+                    return false;
+                }
+                await fetchAndSyncFromSupabase();
             } else {
                 original.quantity = newQty;
                 original.updated_by = `${userSession.name} (${userSession.code})`;
@@ -552,36 +621,70 @@
 
             const sourceSec = db.sectors.find(s => s.id === sourceItem.sector_id);
             const sourceSecName = sourceSec ? sourceSec.name : 'Sector de Origen';
-
             const targetSec = db.sectors.find(s => s.id === targetSectorId);
             const targetSecName = targetSec ? targetSec.name : 'Sector de Destino';
-
             const newSourceQty = oldSourceQty - transferQty;
             const targetItem = db.merchandise.find(m => m.sector_id === targetSectorId && m.name.toLowerCase() === sourceItem.name.toLowerCase() && m.active);
+            const targetBefore = targetItem ? parseFloat(targetItem.quantity) : 0;
+            const targetAfter = targetBefore + transferQty;
 
             let logDetails = `Traspaso: Se enviaron ${transferQty} ${sourceItem.unit} desde "${sourceSecName}" hacia "${targetSecName}" por ${userSession.name}.`;
-            if (comment.trim()) {
-                logDetails += ` [Nota: "${comment}"]`;
-            }
+            if (comment.trim()) logDetails += ` [Nota: "${comment.trim()}"]`;
 
             if (isLiveSupabase && supabaseClient) {
-                await supabaseClient.from('merchandise').update({ quantity: newSourceQty, updated_by: `${userSession.name} (${userSession.code})`, updated_at: new Date().toISOString() }).eq('id', merchId);
+                const sourcePrevious = { updated_by: sourceItem.updated_by, updated_at: sourceItem.updated_at };
+                const { error: sourceError } = await supabaseClient.from('merchandise').update({
+                    quantity: newSourceQty,
+                    updated_by: `${userSession.name} (${userSession.code})`,
+                    updated_at: new Date().toISOString()
+                }).eq('id', merchId);
+                if (sourceError) {
+                    showToast('Error', 'No se pudo actualizar el sector de origen.', 'error');
+                    return false;
+                }
 
+                let targetMerchId = targetItem?.id || null;
+                let createdTarget = false;
                 if (targetItem) {
-                    const newTargetQty = parseFloat(targetItem.quantity) + transferQty;
-                    await supabaseClient.from('merchandise').update({ quantity: newTargetQty, updated_by: `${userSession.name} (${userSession.code})`, updated_at: new Date().toISOString() }).eq('id', targetItem.id);
+                    const { error: targetError } = await supabaseClient.from('merchandise').update({
+                        quantity: targetAfter,
+                        updated_by: `${userSession.name} (${userSession.code})`,
+                        updated_at: new Date().toISOString()
+                    }).eq('id', targetItem.id);
+                    if (targetError) {
+                        await supabaseClient.from('merchandise').update({ quantity: oldSourceQty, ...sourcePrevious }).eq('id', merchId);
+                        showToast('Error', 'No se pudo actualizar el sector de destino.', 'error');
+                        return false;
+                    }
                 } else {
-                    await supabaseClient.from('merchandise').insert([{
+                    const { data: insertedTarget, error: targetError } = await supabaseClient.from('merchandise').insert([{
                         sector_id: targetSectorId,
                         name: sourceItem.name,
                         quantity: transferQty,
                         unit: sourceItem.unit,
                         active: true,
                         updated_by: `${userSession.name} (${userSession.code})`
-                    }]);
+                    }]).select().single();
+                    if (targetError || !insertedTarget) {
+                        await supabaseClient.from('merchandise').update({ quantity: oldSourceQty, ...sourcePrevious }).eq('id', merchId);
+                        showToast('Error', 'No se pudo crear el artículo en el sector de destino.', 'error');
+                        return false;
+                    }
+                    targetMerchId = insertedTarget.id;
+                    createdTarget = true;
                 }
 
-                await supabaseClient.from('inventory_history').insert([{
+                const rollbackTransfer = async () => {
+                    await supabaseClient.from('merchandise').update({ quantity: oldSourceQty, ...sourcePrevious }).eq('id', merchId);
+                    if (createdTarget) await supabaseClient.from('merchandise').delete().eq('id', targetMerchId);
+                    else await supabaseClient.from('merchandise').update({
+                        quantity: targetBefore,
+                        updated_by: targetItem.updated_by,
+                        updated_at: targetItem.updated_at
+                    }).eq('id', targetMerchId);
+                };
+
+                const sourceAudit = await db_insertAuditLog({
                     merchandise_id: merchId,
                     sector_id: sourceItem.sector_id,
                     sector_name: sourceSecName,
@@ -592,18 +695,44 @@
                     details: logDetails,
                     user_code: userSession.code,
                     user_name: userSession.name
-                }]);
+                });
+                if (!sourceAudit) {
+                    await rollbackTransfer();
+                    await fetchAndSyncFromSupabase();
+                    return false;
+                }
 
-                fetchAndSyncFromSupabase();
+                const targetAudit = await db_insertAuditLog({
+                    merchandise_id: targetMerchId,
+                    sector_id: targetSectorId,
+                    sector_name: targetSecName,
+                    merchandise_name: sourceItem.name,
+                    action: 'transfer',
+                    quantity_before: targetBefore,
+                    quantity_after: targetAfter,
+                    details: `Ingreso por traspaso: ${transferQty} ${sourceItem.unit} desde "${sourceSecName}" por ${userSession.name}.`,
+                    user_code: userSession.code,
+                    user_name: userSession.name
+                });
+                if (!targetAudit) {
+                    await supabaseClient.from('inventory_history').delete().eq('id', sourceAudit.id);
+                    await rollbackTransfer();
+                    await fetchAndSyncFromSupabase();
+                    return false;
+                }
+
+                await fetchAndSyncFromSupabase();
             } else {
                 sourceItem.quantity = newSourceQty;
                 sourceItem.updated_by = `${userSession.name} (${userSession.code})`;
                 sourceItem.updated_at = new Date().toISOString();
 
+                let targetMerchId;
                 if (targetItem) {
-                    targetItem.quantity = parseFloat(targetItem.quantity) + transferQty;
+                    targetItem.quantity = targetAfter;
                     targetItem.updated_by = `${userSession.name} (${userSession.code})`;
                     targetItem.updated_at = new Date().toISOString();
+                    targetMerchId = targetItem.id;
                 } else {
                     const freshItem = {
                         id: 'm-' + Math.random().toString(36).substr(2, 9),
@@ -617,9 +746,10 @@
                         updated_at: new Date().toISOString()
                     };
                     db.merchandise.push(freshItem);
+                    targetMerchId = freshItem.id;
                 }
 
-                const log = {
+                db.inventory_history.push({
                     id: 'h-' + Math.random().toString(36).substr(2, 9),
                     merchandise_id: merchId,
                     sector_id: sourceItem.sector_id,
@@ -632,9 +762,20 @@
                     user_code: userSession.code,
                     user_name: userSession.name,
                     created_at: new Date().toISOString()
-                };
-
-                db.inventory_history.push(log);
+                }, {
+                    id: 'h-' + Math.random().toString(36).substr(2, 9),
+                    merchandise_id: targetMerchId,
+                    sector_id: targetSectorId,
+                    sector_name: targetSecName,
+                    merchandise_name: sourceItem.name,
+                    action: 'transfer',
+                    quantity_before: targetBefore,
+                    quantity_after: targetAfter,
+                    details: `Ingreso por traspaso: ${transferQty} ${sourceItem.unit} desde "${sourceSecName}" por ${userSession.name}.`,
+                    user_code: userSession.code,
+                    user_name: userSession.name,
+                    created_at: new Date().toISOString()
+                });
                 saveMockDb(db);
             }
             return true;
@@ -674,7 +815,7 @@
                     return null;
                 }
 
-                await supabaseClient.from('inventory_history').insert([{
+                const auditSaved = await db_insertAuditLog({
                     merchandise_id: inserted.id,
                     sector_id: sectorId,
                     sector_name: sectorName,
@@ -685,9 +826,14 @@
                     details: `Alta de mercadería (${newMerch.quantity} ${unit}) por operador ${userSession.name}`,
                     user_code: userSession.code,
                     user_name: userSession.name
-                }]);
+                });
 
-                fetchAndSyncFromSupabase();
+                if (!auditSaved) {
+                    await supabaseClient.from('merchandise').delete().eq('id', inserted.id);
+                    await fetchAndSyncFromSupabase();
+                    return null;
+                }
+                await fetchAndSyncFromSupabase();
                 return inserted;
             } else {
                 newMerch.id = 'm-' + Math.random().toString(36).substr(2, 9);
@@ -715,18 +861,32 @@
             }
         }
 
-        async function db_deleteMerchandise(merchId, userSession) {
+        async function db_deleteMerchandise(merchId, userSession, reason = 'Artículo cargado por error') {
             const db = getMockDb();
             const item = db.merchandise.find(m => m.id === merchId);
-            if (!item) return;
+            if (!item) return false;
+            if (userSession.role !== 'owner' && item.sector_id !== userSession.sector_id) {
+                showToast('Acceso denegado', 'Solo podés borrar artículos de tu sector.', 'error');
+                return false;
+            }
 
             const sector = db.sectors.find(s => s.id === item.sector_id);
             const sectorName = sector ? sector.name : 'Desconocido';
+            const details = `Baja lógica realizada por ${userSession.name}. Motivo: ${reason || 'Sin detalle'}`;
 
             if (isLiveSupabase && supabaseClient) {
-                await supabaseClient.from('merchandise').update({ active: false, updated_by: `${userSession.name} (${userSession.code})`, updated_at: new Date().toISOString() }).eq('id', merchId);
+                const previous = { active: item.active, updated_by: item.updated_by, updated_at: item.updated_at };
+                const { error } = await supabaseClient.from('merchandise').update({
+                    active: false,
+                    updated_by: `${userSession.name} (${userSession.code})`,
+                    updated_at: new Date().toISOString()
+                }).eq('id', merchId);
+                if (error) {
+                    showToast('Error', 'No se pudo dar de baja el artículo.', 'error');
+                    return false;
+                }
 
-                await supabaseClient.from('inventory_history').insert([{
+                const auditSaved = await db_insertAuditLog({
                     merchandise_id: merchId,
                     sector_id: item.sector_id,
                     sector_name: sectorName,
@@ -734,18 +894,21 @@
                     action: 'delete',
                     quantity_before: item.quantity,
                     quantity_after: 0,
-                    details: `Baja lógica de mercadería por administrador ${userSession.name}`,
+                    details,
                     user_code: userSession.code,
                     user_name: userSession.name
-                }]);
-
-                fetchAndSyncFromSupabase();
+                });
+                if (!auditSaved) {
+                    await supabaseClient.from('merchandise').update(previous).eq('id', merchId);
+                    await fetchAndSyncFromSupabase();
+                    return false;
+                }
+                await fetchAndSyncFromSupabase();
             } else {
                 item.active = false;
                 item.updated_by = `${userSession.name} (${userSession.code})`;
                 item.updated_at = new Date().toISOString();
-
-                const log = {
+                db.inventory_history.push({
                     id: 'h-' + Math.random().toString(36).substr(2, 9),
                     merchandise_id: merchId,
                     sector_id: item.sector_id,
@@ -754,29 +917,32 @@
                     action: 'delete',
                     quantity_before: item.quantity,
                     quantity_after: 0,
-                    details: `Baja lógica de mercadería por administrador ${userSession.name}`,
+                    details,
                     user_code: userSession.code,
                     user_name: userSession.name,
                     created_at: new Date().toISOString()
-                };
-
-                db.inventory_history.push(log);
+                });
                 saveMockDb(db);
             }
+            return true;
         }
 
         async function db_restoreMerchandise(merchId, userSession) {
             const db = getMockDb();
             const item = db.merchandise.find(m => m.id === merchId);
-            if (!item) return;
+            if (!item || userSession.role !== 'owner') return false;
 
             const sector = db.sectors.find(s => s.id === item.sector_id);
             const sectorName = sector ? sector.name : 'Desconocido';
-
             if (isLiveSupabase && supabaseClient) {
-                await supabaseClient.from('merchandise').update({ active: true, updated_by: `${userSession.name} (${userSession.code})` }).eq('id', merchId);
+                const { error } = await supabaseClient.from('merchandise').update({
+                    active: true,
+                    updated_by: `${userSession.name} (${userSession.code})`,
+                    updated_at: new Date().toISOString()
+                }).eq('id', merchId);
+                if (error) return false;
 
-                await supabaseClient.from('inventory_history').insert([{
+                const auditSaved = await db_insertAuditLog({
                     merchandise_id: merchId,
                     sector_id: item.sector_id,
                     sector_name: sectorName,
@@ -787,15 +953,18 @@
                     details: `Restauración realizada por el Dueño: ${userSession.name}`,
                     user_code: userSession.code,
                     user_name: userSession.name
-                }]);
-
-                fetchAndSyncFromSupabase();
+                });
+                if (!auditSaved) {
+                    await supabaseClient.from('merchandise').update({ active: false }).eq('id', merchId);
+                    await fetchAndSyncFromSupabase();
+                    return false;
+                }
+                await fetchAndSyncFromSupabase();
             } else {
                 item.active = true;
                 item.updated_by = `${userSession.name} (${userSession.code})`;
                 item.updated_at = new Date().toISOString();
-
-                const log = {
+                db.inventory_history.push({
                     id: 'h-' + Math.random().toString(36).substr(2, 9),
                     merchandise_id: merchId,
                     sector_id: item.sector_id,
@@ -808,11 +977,10 @@
                     user_code: userSession.code,
                     user_name: userSession.name,
                     created_at: new Date().toISOString()
-                };
-
-                db.inventory_history.push(log);
+                });
                 saveMockDb(db);
             }
+            return true;
         }
 
         async function db_hardDeleteMerchandise(merchId) {
@@ -868,15 +1036,33 @@
             }
         }
 
+        async function db_deleteHistoryLog(historyId) {
+            const db = getMockDb();
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient.from('inventory_history').delete().eq('id', historyId);
+                if (error) {
+                    showToast('Error', 'No se pudo borrar el registro de auditoría.', 'error');
+                    return false;
+                }
+                await fetchAndSyncFromSupabase();
+            } else {
+                db.inventory_history = db.inventory_history.filter(h => h.id !== historyId);
+                saveMockDb(db);
+            }
+            return true;
+        }
+
         async function db_clearHistoryLogs() {
             const db = getMockDb();
             if (isLiveSupabase && supabaseClient) {
-                await supabaseClient.from('inventory_history').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-                fetchAndSyncFromSupabase();
+                const { error } = await supabaseClient.from('inventory_history').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                if (error) return false;
+                await fetchAndSyncFromSupabase();
             } else {
                 db.inventory_history = [];
                 saveMockDb(db);
             }
+            return true;
         }
 
         async function db_saveSettings(configObj) {
@@ -1088,6 +1274,7 @@
                                         <button onclick="adjustStock('${item.id}', -1, 'owner')" class="bg-red-50 hover:bg-red-100 text-red-700 w-6 h-6 rounded font-bold">-</button>
                                         <button onclick="adjustStock('${item.id}', 1, 'owner')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 w-6 h-6 rounded font-bold">+</button>
                                         <button onclick="openTransferModal('${item.id}', 'owner')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-1 rounded font-bold text-[9px]" title="Traspasar sector">🔄</button>
+                                        <button onclick="deleteItem('${item.id}', 'owner')" class="bg-red-50 hover:bg-red-100 text-red-700 px-1.5 py-1 rounded font-bold text-[8px]" title="Dar de baja artículo">🗑️ Borrar</button>
                                     </div>
                                 </td>
                             </tr>
@@ -1142,51 +1329,86 @@
                 `;
 
             } else if (tab === 'history') {
+                const auditGroupsMap = new Map();
+                db.inventory_history.forEach(log => {
+                    const groupId = String(log.sector_id || '__NO_SECTOR__');
+                    if (!auditGroupsMap.has(groupId)) {
+                        auditGroupsMap.set(groupId, {
+                            id: groupId,
+                            name: log.sector_name || 'Sin sector',
+                            logs: []
+                        });
+                    }
+                    auditGroupsMap.get(groupId).logs.push(log);
+                });
+                const auditGroups = [...auditGroupsMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+
                 html += `
-                    <div class="bg-[#0d3a22]/5 border border-[#0d3a22]/10 p-3 rounded-xl flex justify-between items-center select-none">
+                    <div class="bg-[#0d3a22]/5 border border-[#0d3a22]/10 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 select-none">
                         <div>
                             <h4 class="text-xs font-bold text-[#0d3a22] uppercase">Bitácora Secreta de Auditoría</h4>
-                            <p class="text-[9px] text-slate-500">Solo tú tienes visibilidad de esta pestaña. Los empleados no saben que se registra todo.</p>
+                            <p class="text-[9px] text-slate-500">Movimientos agrupados por sector. Podés copiar, exportar o borrar registros individuales.</p>
                         </div>
-                        <button onclick="clearHistoryLogs()" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition">
-                            🚨 Vaciar Logs
-                        </button>
+                        <div class="flex gap-1.5 shrink-0">
+                            <button onclick="exportToExcel()" class="bg-emerald-800 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition">📥 Excel completo</button>
+                            <button onclick="clearHistoryLogs()" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition">🚨 Vaciar todo</button>
+                        </div>
                     </div>
 
-                    <div class="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                    <div class="space-y-4">
                 `;
 
-                if (db.inventory_history.length === 0) {
+                if (auditGroups.length === 0) {
                     html += `<div class="p-6 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">No hay registros de auditoría aún.</div>`;
                 } else {
-                    db.inventory_history.forEach(log => {
-                        let actionClass = "bg-slate-100 text-slate-800";
-                        let actionLabel = log.action.toUpperCase();
-
-                        if (log.action === 'create') { actionClass = "bg-emerald-100 text-emerald-850"; actionLabel = "ALTA"; }
-                        else if (log.action === 'update') { actionClass = "bg-sky-100 text-sky-850"; actionLabel = "STOCK"; }
-                        else if (log.action === 'delete') { actionClass = "bg-red-100 text-red-850"; actionLabel = "BAJA"; }
-                        else if (log.action === 'restore') { actionClass = "bg-purple-100 text-purple-850"; actionLabel = "RESTORE"; }
-                        else if (log.action === 'transfer') { actionClass = "bg-blue-100 text-blue-850"; actionLabel = "TRASPASO"; }
-
+                    auditGroups.forEach(group => {
                         html += `
-                            <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex flex-col gap-1 text-xs">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-1.5 flex-wrap">
-                                        <span class="px-1.5 py-0.2 rounded text-[8px] font-bold ${actionClass}">${actionLabel}</span>
-                                        <span class="font-extrabold text-slate-800">${log.merchandise_name}</span>
+                            <section class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                                <div class="bg-emerald-950 text-white p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                                    <div>
+                                        <h5 class="font-extrabold text-xs">${escapeHtml(group.name)}</h5>
+                                        <p class="text-[9px] text-emerald-300">${group.logs.length} movimiento${group.logs.length === 1 ? '' : 's'}</p>
                                     </div>
-                                    <span class="text-[8px] text-slate-400 font-semibold">${new Date(log.created_at).toLocaleString()}</span>
+                                    <div class="flex gap-1.5">
+                                        <button onclick="copySectorAudit('${group.id}')" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-2.5 py-1.5 rounded-lg text-[9px] font-bold">📋 Copiar</button>
+                                        <button onclick="exportSectorAuditToExcel('${group.id}')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 rounded-lg text-[9px] font-bold">📥 Excel</button>
+                                    </div>
                                 </div>
-                                <p class="text-slate-600 text-[10.5px] font-semibold">${log.details}</p>
-                                <div class="text-[9px] text-slate-400">
-                                    Operador: <span class="font-bold text-slate-600">${log.user_name}</span> | Código: <span class="font-mono font-bold">${log.user_code}</span> | Sector: <span class="font-semibold">${log.sector_name}</span>
-                                </div>
-                            </div>
+                                <div class="p-2.5 space-y-2 max-h-[420px] overflow-y-auto">
                         `;
+
+                        group.logs.forEach(log => {
+                            let actionClass = "bg-slate-100 text-slate-800";
+                            let actionLabel = String(log.action || 'registro').toUpperCase();
+                            if (log.action === 'create') { actionClass = "bg-emerald-100 text-emerald-850"; actionLabel = "ALTA"; }
+                            else if (log.action === 'update') { actionClass = "bg-sky-100 text-sky-850"; actionLabel = "STOCK"; }
+                            else if (log.action === 'delete') { actionClass = "bg-red-100 text-red-850"; actionLabel = "BAJA"; }
+                            else if (log.action === 'restore') { actionClass = "bg-purple-100 text-purple-850"; actionLabel = "RESTAURADO"; }
+                            else if (log.action === 'transfer') { actionClass = "bg-blue-100 text-blue-850"; actionLabel = "TRASPASO"; }
+
+                            html += `
+                                <article class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span class="px-1.5 py-0.5 rounded text-[8px] font-bold ${actionClass}">${actionLabel}</span>
+                                            <span class="font-extrabold text-slate-800">${escapeHtml(log.merchandise_name || 'Sin artículo')}</span>
+                                        </div>
+                                        <button onclick="deleteHistoryLog('${log.id}')" class="bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 px-2 py-1 rounded-lg text-[8px] font-bold shrink-0" title="Borrar solo este registro">🗑️ Borrar</button>
+                                    </div>
+                                    <p class="text-slate-600 text-[10.5px] font-semibold mt-1.5">${escapeHtml(log.details || '')}</p>
+                                    <div class="text-[9px] text-slate-400 mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                                        <span>📅 ${new Date(log.created_at).toLocaleString()}</span>
+                                        <span>👤 <b class="text-slate-600">${escapeHtml(log.user_name || '')}</b></span>
+                                        <span>🔑 ${escapeHtml(log.user_code || '')}</span>
+                                        <span>Antes: ${log.quantity_before ?? '--'} · Después: ${log.quantity_after ?? '--'}</span>
+                                    </div>
+                                </article>
+                            `;
+                        });
+
+                        html += `</div></section>`;
                     });
                 }
-
                 html += `</div>`;
 
             } else if (tab === 'codes') {
@@ -1227,7 +1449,7 @@
                             <td class="p-2 font-mono font-bold text-slate-800">${c.code}</td>
                             <td class="p-2 font-semibold text-slate-700">${c.name}</td>
                             <td class="p-2 text-slate-500">${secName}</td>
-                            <td class="p-2"><span class="px-1.5 py-0.2 rounded text-[8px] font-bold ${roleBadge}">${c.role.toUpperCase()}</span></td>
+                            <td class="p-2"><span class="px-1.5 py-0.2 rounded text-[8px] font-bold ${roleBadge}">${formatRoleLabel(c.role)}</span></td>
                             <td class="p-2 text-center">
                                 <button onclick="toggleCodeStatus('${c.id}', ${c.active}, 'owner')" class="px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${c.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-red-100 text-red-800 border-red-300'}">
                                     ${c.active ? 'ACTIVO' : 'ANULADO'}
@@ -1438,7 +1660,7 @@
                                     <div>
                                         <div class="flex items-center gap-1.5 flex-wrap">
                                             <span class="font-mono font-bold text-xs text-slate-950 bg-slate-100 px-1.5 py-0.2 rounded">${code.code}</span>
-                                            <span class="text-[8px] font-bold px-1 rounded uppercase ${roleColor}">${code.role.toUpperCase()}</span>
+                                            <span class="text-[8px] font-bold px-1 rounded uppercase ${roleColor}">${formatRoleLabel(code.role)}</span>
                                         </div>
                                         <div class="text-[10px] text-slate-700 font-semibold mt-1">Colaborador: ${code.name}</div>
                                     </div>
@@ -1592,7 +1814,7 @@
                         <span class="text-base">👤</span>
                         <div>
                             <h4 class="font-bold text-xs leading-none">${session.name}</h4>
-                            <p class="text-[9px] text-emerald-300 font-bold uppercase tracking-wider mt-1">${session.role.toUpperCase()} • ${mySectorName}</p>
+                            <p class="text-[9px] text-emerald-300 font-bold uppercase tracking-wider mt-1">${formatRoleLabel(session.role)} • ${mySectorName}</p>
                         </div>
                     </div>
                     <button onclick="handleFullscreenLogout()" class="text-[9px] font-bold bg-[#198754] hover:bg-red-800 border border-emerald-800 hover:border-red-700 px-2.5 py-1.5 rounded-lg transition text-white">
@@ -1627,6 +1849,7 @@
                                 <div class="flex items-center gap-1 select-none">
                                     <button onclick="promptReasonAndAdjust('${item.id}', -1, 'fullscreen')" class="bg-red-50 hover:bg-red-100 text-red-700 w-8.5 h-8.5 rounded-xl font-bold text-xs flex items-center justify-center border border-red-100 active:scale-90">-1</button>
                                     <button onclick="adjustStock('${item.id}', 1, 'fullscreen')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 w-8.5 h-8.5 rounded-xl font-bold text-xs flex items-center justify-center border border-emerald-100 active:scale-90">+1</button>
+                                    <button onclick="deleteItem('${item.id}', 'fullscreen')" class="bg-red-100 hover:bg-red-200 text-red-700 px-2 h-8.5 rounded-xl font-bold text-[9px] border border-red-200 active:scale-90" title="Borrar artículo cargado por error">🗑️ Borrar</button>
                                 </div>
                             </div>
                         `;
@@ -1677,8 +1900,8 @@
                                         <button onclick="adjustStock('${item.id}', 1, 'fullscreen')" class="bg-white px-2 py-1 text-xs text-slate-700 border-l border-slate-200">+</button>
                                     </div>
                                     <button onclick="openTransferModal('${item.id}', 'fullscreen')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-1.5 rounded-lg font-bold text-[9px]">🔄</button>
-                                    <button onclick="deleteItem('${item.id}', 'fullscreen')" class="bg-red-50 hover:bg-red-100 text-red-650 p-1.5 rounded-lg transition">
-                                        🗑️
+                                    <button onclick="deleteItem('${item.id}', 'fullscreen')" class="bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1.5 rounded-lg font-bold text-[9px] transition" title="Borrar artículo cargado por error">
+                                        🗑️ Borrar
                                     </button>
                                 </div>
                             </div>
@@ -1705,9 +1928,13 @@
         // DYNAMIC UTILITIES AND MODAL ACTIONS (PRO)
         // ==========================================
 
-        function setTab(screen, tabName) {
+        async function setTab(screen, tabName) {
             activeTabs[screen] = tabName;
-            renderAllScreens();
+            if (screen === 'owner' && tabName === 'history' && isLiveSupabase) {
+                await fetchAndSyncFromSupabase();
+            } else {
+                renderAllScreens();
+            }
         }
 
         function setOwnerSectorFilter(value) {
@@ -1895,8 +2122,17 @@
                 details += ` [Nota: "${comment}"]`;
 
                 if (isLiveSupabase && supabaseClient) {
-                    await supabaseClient.from('merchandise').update({ quantity: newQty, updated_by: `${userSession.name} (${userSession.code})`, updated_at: new Date().toISOString() }).eq('id', merchId);
-                    await supabaseClient.from('inventory_history').insert([{
+                    const previous = { quantity: oldQty, updated_by: original.updated_by, updated_at: original.updated_at };
+                    const { error } = await supabaseClient.from('merchandise').update({
+                        quantity: newQty,
+                        updated_by: `${userSession.name} (${userSession.code})`,
+                        updated_at: new Date().toISOString()
+                    }).eq('id', merchId);
+                    if (error) {
+                        showToast('Error', 'No se pudo guardar el ajuste.', 'error');
+                        return;
+                    }
+                    const auditSaved = await db_insertAuditLog({
                         merchandise_id: merchId,
                         sector_id: original.sector_id,
                         sector_name: sectorName,
@@ -1904,11 +2140,16 @@
                         action: 'update',
                         quantity_before: oldQty,
                         quantity_after: newQty,
-                        details: details,
+                        details,
                         user_code: userSession.code,
                         user_name: userSession.name
-                    }]);
-                    fetchAndSyncFromSupabase();
+                    });
+                    if (!auditSaved) {
+                        await supabaseClient.from('merchandise').update(previous).eq('id', merchId);
+                        await fetchAndSyncFromSupabase();
+                        return;
+                    }
+                    await fetchAndSyncFromSupabase();
                 } else {
                     original.quantity = newQty;
                     original.updated_by = `${userSession.name} (${userSession.code})`;
@@ -2011,15 +2252,14 @@
             let user = null;
             if (screenContext === 'owner') user = activeSessions.owner;
             else if (screenContext === 'admin') user = activeSessions.admin;
+            else if (screenContext === 'staff') user = activeSessions.staff;
             else if (screenContext === 'fullscreen') user = activeSessions.fullscreen;
-
             if (!user) return;
 
-            if (confirm("¿Estás seguro de dar de baja lógicamente esta mercadería? Se mantendrá en la bitácora del Dueño.")) {
-                await db_deleteMerchandise(merchId, user);
-                showToast("Dado de Baja", "Se retiró el stock activo de la mercadería.", "warning");
-                if (!isLiveSupabase) renderAllScreens();
-            }
+            const reason = prompt('Motivo de la baja (quedará registrado en la auditoría):', 'Artículo cargado por error');
+            if (reason === null) return;
+            const deleted = await db_deleteMerchandise(merchId, user, reason.trim() || 'Sin detalle');
+            if (deleted) showToast('Artículo dado de baja', 'Se retiró del inventario y quedó registrado en auditoría.', 'warning');
         }
 
         async function restoreItem(merchId, screenContext) {
@@ -2070,9 +2310,8 @@
 
         async function clearHistoryLogs() {
             if (confirm("¿Estás seguro de vaciar por completo el historial de auditoría? Esta acción es irreversible.")) {
-                await db_clearHistoryLogs();
-                showToast("Historial Purgado", "Se vació la bitácora completa.", "error");
-                if (!isLiveSupabase) renderAllScreens();
+                const cleared = await db_clearHistoryLogs();
+                if (cleared) showToast("Historial Purgado", "Se vació la bitácora completa.", "error");
             }
         }
 
@@ -2143,6 +2382,73 @@
             showToast("📥 Excel Descargado", "Planilla de control descargada con éxito.", "success");
         }
 
+        function getSectorAuditLogs(sectorId) {
+            const db = getMockDb();
+            return db.inventory_history.filter(h => String(h.sector_id || '__NO_SECTOR__') === String(sectorId));
+        }
+
+        function buildAuditRows(logs) {
+            return logs.map(h => ({
+                "Fecha y Hora": new Date(h.created_at).toLocaleString(),
+                "Sector": h.sector_name || 'Sin sector',
+                "Artículo": h.merchandise_name || '',
+                "Acción": String(h.action || '').toUpperCase(),
+                "Cantidad Antes": h.quantity_before ?? '--',
+                "Cantidad Después": h.quantity_after ?? '--',
+                "Detalle": h.details || '',
+                "Operador": h.user_name || '',
+                "Código": h.user_code || ''
+            }));
+        }
+
+        async function copySectorAudit(sectorId) {
+            const logs = getSectorAuditLogs(sectorId);
+            if (!logs.length) {
+                showToast('Sin movimientos', 'Este sector todavía no tiene registros.', 'warning');
+                return;
+            }
+            const rows = buildAuditRows(logs);
+            const headers = Object.keys(rows[0]);
+            const text = [headers.join('	'), ...rows.map(row => headers.map(h => String(row[h]).replaceAll('	', ' ')).join('	'))].join('\n');
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch {
+                const area = document.createElement('textarea');
+                area.value = text;
+                area.style.position = 'fixed';
+                area.style.opacity = '0';
+                document.body.appendChild(area);
+                area.select();
+                document.execCommand('copy');
+                area.remove();
+            }
+            showToast('📋 Auditoría copiada', 'Pegala directamente en Excel o en una planilla.', 'success');
+        }
+
+        function exportSectorAuditToExcel(sectorId) {
+            const logs = getSectorAuditLogs(sectorId);
+            if (!logs.length) {
+                showToast('Sin movimientos', 'Este sector todavía no tiene registros.', 'warning');
+                return;
+            }
+            const rows = buildAuditRows(logs);
+            const sectorName = logs[0].sector_name || 'Sin_sector';
+            const safeName = sectorName.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_-]+/g, '_').slice(0, 45);
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(rows);
+            XLSX.utils.book_append_sheet(wb, ws, 'Auditoría');
+            XLSX.writeFile(wb, `Auditoria_${safeName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            showToast('📥 Excel descargado', `Auditoría de ${sectorName}.`, 'success');
+        }
+
+        async function deleteHistoryLog(historyId) {
+            const owner = activeSessions.fullscreen?.role === 'owner' || activeSessions.owner?.role === 'owner';
+            if (!owner) return;
+            if (!confirm('¿Borrar únicamente este registro de auditoría? El inventario no será modificado.')) return;
+            const deleted = await db_deleteHistoryLog(historyId);
+            if (deleted) showToast('Registro eliminado', 'Se borró solo el movimiento seleccionado.', 'warning');
+        }
+
         // --- WHATSAPP UTILITIES ---
         async function handleCopyStockText(sectorId) {
             const db = getMockDb();
@@ -2183,7 +2489,7 @@
         }
 
         function handleShareCodeWhatsApp(collabName, code, sectorName, role) {
-            const txt = `🌿 *${systemSettings.app_name} - Credenciales de Acceso*\n\nHola *${collabName}*, se ha generado tu clave de seguridad para operar en el sistema de inventario:\n\n🛖 Sector: *${sectorName}*\n🔑 Código de Acceso: *${code}*\n👤 Rango: *${role.toUpperCase()}*\n\nIngresa al inventario ingresando tus datos reales y tu código de acceso asignado en el sistema.`;
+            const txt = `🌿 *${systemSettings.app_name} - Credenciales de Acceso*\n\nHola *${collabName}*, se ha generado tu clave de seguridad para operar en el sistema de inventario:\n\n🛖 Sector: *${sectorName}*\n🔑 Código de Acceso: *${code}*\n👤 Rango: *${formatRoleLabel(role)}*\n\nIngresa al inventario ingresando tus datos reales y tu código de acceso asignado en el sistema.`;
             const url = `https://wa.me/?text=${encodeURIComponent(txt)}`;
             window.open(url, '_blank');
         }
@@ -2306,6 +2612,13 @@
             };
         }
 
+        function formatRoleLabel(role) {
+            if (role === 'owner') return 'DUEÑO';
+            if (role === 'admin') return 'ADMINISTRADOR';
+            if (role === 'staff') return 'PERSONAL';
+            return String(role || '').toUpperCase();
+        }
+
         function escapeHtml(value) {
             return String(value)
                 .replaceAll('&', '&amp;')
@@ -2393,8 +2706,8 @@
                     <div>
                         <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Rango del Código</label>
                         <select id="new-code-role" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs focus:ring-1 focus:ring-emerald-700 outline-none font-bold">
-                            <option value="staff">Personal de Campo / Mucamas</option>
-                            <option value="admin">Administrador de Sector (Admin)</option>
+                            <option value="staff">Personal del sector asignado</option>
+                            <option value="admin">Administrador del sector asignado</option>
                             <option value="owner">Propietario / Dueño (Owner)</option>
                         </select>
                     </div>
@@ -2411,8 +2724,8 @@
                     <div>
                         <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Rango del Código</label>
                         <select id="new-code-role" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs focus:ring-1 focus:ring-emerald-700 outline-none font-bold">
-                            <option value="staff">Personal de Campo / Cocina</option>
-                            <option value="admin">Administrador de Área (Admin)</option>
+                            <option value="staff">Personal de ${userSecName}</option>
+                            <option value="admin">Administrador de ${userSecName}</option>
                         </select>
                     </div>
                 `;
@@ -2549,7 +2862,7 @@
 
             activeSessions.fullscreen = session;
             renderFullscreenScreen();
-            showToast("Ingreso Exitoso", `Bienvenido/a ${session.name}. Has accedido como ${session.role.toUpperCase()}.`, "success");
+            showToast("Ingreso Exitoso", `Bienvenido/a ${session.name}. Has accedido como ${formatRoleLabel(session.role)}.`, "success");
         }
 
         function handleFullscreenLogout() {
