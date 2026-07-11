@@ -121,10 +121,10 @@
             <div class="flex flex-wrap gap-2 items-center">
                 <!-- Mode Selector Buttons -->
                 <div class="bg-emerald-950/60 p-1 rounded-xl border border-emerald-800/40 flex shadow-inner">
-                    <button id="btn-mode-simulator" onclick="switchAppMode('simulator')" class="px-3.5 py-2 rounded-lg text-xs font-bold transition-all bg-[#198754] text-white">
+                    <button id="btn-mode-simulator" onclick="switchAppMode('simulator')" class="px-3.5 py-2 rounded-lg text-xs font-bold transition-all text-emerald-200 hover:text-white">
                         🔌 Simulador de Dispositivos (3 Pantallas)
                     </button>
-                    <button id="btn-mode-fullscreen" onclick="switchAppMode('fullscreen')" class="px-3.5 py-2 rounded-lg text-xs font-bold transition-all text-emerald-200 hover:text-white">
+                    <button id="btn-mode-fullscreen" onclick="switchAppMode('fullscreen')" class="px-3.5 py-2 rounded-lg text-xs font-bold transition-all bg-[#198754] text-white">
                         📱 App de Trabajo Única
                     </button>
                 </div>
@@ -459,7 +459,7 @@
         };
 
         let ownerSelectedSectorFilter = 'all';
-        let currentAppDisplayMode = 'simulator';
+        let currentAppDisplayMode = 'fullscreen';
 
         // ==========================================
         // APP INITIALIZATION
@@ -467,6 +467,8 @@
         window.addEventListener('DOMContentLoaded', () => {
             initSupabaseClient();
             loadSettings();
+            // Iniciar directamente en modo App de Trabajo Única
+            switchAppMode('fullscreen');
             renderAllScreens();
 
             // Realtime simulation listeners
@@ -2756,7 +2758,52 @@
             setTimeout(() => { if (toast.parentNode) { toast.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => toast.remove(), 300); } }, 4000);
         }
 
+        // --- FULLSCREEN LOGIN / LOGOUT HANDLERS (FUNCIONES QUE FALTABAN) ---
+        async function handleFullscreenLogin() {
+            const firstName = document.getElementById('fs-login-first')?.value.trim();
+            const lastName = document.getElementById('fs-login-last')?.value.trim();
+            const code = document.getElementById('fs-login-code')?.value.trim();
+
+            if (!firstName || !lastName || !code) {
+                showToast("Campos incompletos", "Por favor completa todos los campos para ingresar.", "warning");
+                return;
+            }
+
+            if (code.length < 4 || code.length > 6) {
+                showToast("Código Inválido", "El código debe tener entre 4 y 6 caracteres.", "warning");
+                return;
+            }
+
+            const session = await db_validateCode(code, firstName, lastName);
+
+            if (!session) {
+                showToast("Código Inválido", "El código ingresado no es válido o está desactivado. Verifica con tu administrador.", "error");
+                return;
+            }
+
+            activeSessions.fullscreen = session;
+            renderFullscreenScreen();
+            showToast("Ingreso Exitoso", `Bienvenido/a ${session.name}. Has accedido como ${session.role.toUpperCase()}.`, "success");
+        }
+
+        function quickFillLogin(first, last, code) {
+            const inputFirst = document.getElementById('fs-login-first');
+            const inputLast = document.getElementById('fs-login-last');
+            const inputCode = document.getElementById('fs-login-code');
+
+            if (inputFirst) inputFirst.value = first;
+            if (inputLast) inputLast.value = last;
+            if (inputCode) inputCode.value = code;
+
+            showToast("Datos precargados", `Código ${code} listo para validar. Presiona "Ingresar al Sistema".`, "info");
+        }
+
+        function handleFullscreenLogout() {
+            activeSessions.fullscreen = null;
+            renderFullscreenScreen();
+            showToast("Sesión Cerrada", "Has salido del sistema de inventario.", "info");
+        }
+
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1988fc64c49680d',t:'MTc4Mzc4MDgwOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
