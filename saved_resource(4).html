@@ -1,0 +1,2762 @@
+<!DOCTYPE html>
+<!-- saved from url=(0012)about:srcdoc -->
+<html lang="es"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agua Verde — Sistema de Inventario Realtime PRO</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com/"></script>
+    <!-- Google Fonts (Playful, Natural & Modern theme) -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+    <!-- Supabase JS Client CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- SheetJS CDN (Pure client-side Excel exporting with sheets, styles, and full format) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f1f6f3; /* Warm watery soft gray-green background */
+        }
+        h1, h2, h3, h4, h5, .brand-font {
+            font-family: 'Fredoka', sans-serif;
+        }
+        /* Customized elegant scrollbar */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.02);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(25, 135, 84, 0.3);
+            border-radius: 6px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(25, 135, 84, 0.6);
+        }
+        /* Mobile Device Frame styling */
+        .phone-frame {
+            border: 11px solid #142c1f;
+            border-radius: 34px;
+            box-shadow: 0 20px 40px -15px rgba(8, 33, 19, 0.45);
+            overflow: hidden;
+            background: #ffffff;
+            position: relative;
+        }
+        .phone-notch {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 18px;
+            background: #142c1f;
+            border-bottom-left-radius: 10px;
+            border-bottom-right-radius: 10px;
+            z-index: 50;
+        }
+        .phone-home-indicator {
+            position: absolute;
+            bottom: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 4px;
+            background: #142c1f;
+            border-radius: 2px;
+            z-index: 50;
+        }
+        .android-punch {
+            position: absolute;
+            top: 6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 8px;
+            height: 8px;
+            background: #142c1f;
+            border-radius: 50%;
+            z-index: 50;
+        }
+        .android-bar {
+            height: 20px;
+            background: #0d3a22;
+            color: #d1e7dd;
+            font-size: 9px;
+            padding: 0 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        /* Keyframe pop-up animations */
+        @keyframes popUp {
+            0% { transform: scale(0.95); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop-up {
+            animation: popUp 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.fixed{position:fixed}.absolute{position:absolute}.inset-0{inset:0px}.bottom-0{bottom:0px}.left-0{left:0px}.right-0{right:0px}.right-5{right:1.25rem}.top-5{top:1.25rem}.mx-auto{margin-left:auto;margin-right:auto}.mb-1{margin-bottom:0.25rem}.mb-1\.5{margin-bottom:0.375rem}.block{display:block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-10{height:2.5rem}.h-2\.5{height:0.625rem}.h-3{height:0.75rem}.h-3\.5{height:0.875rem}.h-4{height:1rem}.h-5{height:1.25rem}.h-8{height:2rem}.h-\[590px\]{height:590px}.h-\[602px\]{height:602px}.h-\[610px\]{height:610px}.h-\[670px\]{height:670px}.max-h-\[420px\]{max-height:420px}.min-h-screen{min-height:100vh}.min-h-\[510px\]{min-height:510px}.min-h-\[630px\]{min-height:630px}.min-h-\[670px\]{min-height:670px}.w-2\.5{width:0.625rem}.w-3{width:0.75rem}.w-3\.5{width:0.875rem}.w-4{width:1rem}.w-5{width:1.25rem}.w-8{width:2rem}.w-full{width:100%}.max-w-7xl{max-width:80rem}.max-w-\[340px\]{max-width:340px}.max-w-md{max-width:28rem}.max-w-xl{max-width:36rem}.shrink-0{flex-shrink:0}.flex-grow{flex-grow:1}@keyframes pulse{50%{opacity:.5}}.animate-pulse{animation:pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite}.select-none{-webkit-user-select:none;user-select:none}.list-decimal{list-style-type:decimal}.grid-cols-1{grid-template-columns:repeat(1, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-start{align-items:flex-start}.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.justify-around{justify-content:space-around}.gap-1{gap:0.25rem}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.gap-2\.5{gap:0.625rem}.gap-3{gap:0.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.space-y-1\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.375rem * var(--tw-space-y-reverse))}.space-y-3\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.875rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.875rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.overflow-hidden{overflow:hidden}.overflow-y-auto{overflow-y:auto}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rounded{border-radius:0.25rem}.rounded-2xl{border-radius:1rem}.rounded-3xl{border-radius:1.5rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-sm{border-radius:0.125rem}.rounded-xl{border-radius:0.75rem}.border{border-width:1px}.border-2{border-width:2px}.border-4{border-width:4px}.border-b{border-bottom-width:1px}.border-b-2{border-bottom-width:2px}.border-b-4{border-bottom-width:4px}.border-l-4{border-left-width:4px}.border-t{border-top-width:1px}.border-\[\#0dcaf0\]{--tw-border-opacity:1;border-color:rgb(13 202 240 / var(--tw-border-opacity, 1))}.border-\[\#0dcaf0\]\/20{border-color:rgb(13 202 240 / 0.2)}.border-\[\#0dcaf0\]\/25{border-color:rgb(13 202 240 / 0.25)}.border-emerald-100{--tw-border-opacity:1;border-color:rgb(209 250 229 / var(--tw-border-opacity, 1))}.border-emerald-200{--tw-border-opacity:1;border-color:rgb(167 243 208 / var(--tw-border-opacity, 1))}.border-emerald-300{--tw-border-opacity:1;border-color:rgb(110 231 183 / var(--tw-border-opacity, 1))}.border-emerald-700{--tw-border-opacity:1;border-color:rgb(4 120 87 / var(--tw-border-opacity, 1))}.border-emerald-800\/10{border-color:rgb(6 95 70 / 0.1)}.border-emerald-800\/40{border-color:rgb(6 95 70 / 0.4)}.border-emerald-900{--tw-border-opacity:1;border-color:rgb(6 78 59 / var(--tw-border-opacity, 1))}.border-emerald-900\/10{border-color:rgb(6 78 59 / 0.1)}.border-emerald-950\/25{border-color:rgb(2 44 34 / 0.25)}.border-slate-100{--tw-border-opacity:1;border-color:rgb(241 245 249 / var(--tw-border-opacity, 1))}.border-slate-200{--tw-border-opacity:1;border-color:rgb(226 232 240 / var(--tw-border-opacity, 1))}.border-slate-300{--tw-border-opacity:1;border-color:rgb(203 213 225 / var(--tw-border-opacity, 1))}.border-white\/40{border-color:rgb(255 255 255 / 0.4)}.bg-\[\#0d3a22\]{--tw-bg-opacity:1;background-color:rgb(13 58 34 / var(--tw-bg-opacity, 1))}.bg-\[\#0dcaf0\]{--tw-bg-opacity:1;background-color:rgb(13 202 240 / var(--tw-bg-opacity, 1))}.bg-\[\#0dcaf0\]\/15{background-color:rgb(13 202 240 / 0.15)}.bg-\[\#0dcaf0\]\/20{background-color:rgb(13 202 240 / 0.2)}.bg-\[\#0f5132\]{--tw-bg-opacity:1;background-color:rgb(15 81 50 / var(--tw-bg-opacity, 1))}.bg-\[\#198754\]{--tw-bg-opacity:1;background-color:rgb(25 135 84 / var(--tw-bg-opacity, 1))}.bg-amber-100{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.bg-amber-500{--tw-bg-opacity:1;background-color:rgb(245 158 11 / var(--tw-bg-opacity, 1))}.bg-black\/70{background-color:rgb(0 0 0 / 0.7)}.bg-emerald-100{--tw-bg-opacity:1;background-color:rgb(209 250 229 / var(--tw-bg-opacity, 1))}.bg-emerald-100\/60{background-color:rgb(209 250 229 / 0.6)}.bg-emerald-50{--tw-bg-opacity:1;background-color:rgb(236 253 245 / var(--tw-bg-opacity, 1))}.bg-emerald-800{--tw-bg-opacity:1;background-color:rgb(6 95 70 / var(--tw-bg-opacity, 1))}.bg-emerald-900\/5{background-color:rgb(6 78 59 / 0.05)}.bg-emerald-950{--tw-bg-opacity:1;background-color:rgb(2 44 34 / var(--tw-bg-opacity, 1))}.bg-emerald-950\/60{background-color:rgb(2 44 34 / 0.6)}.bg-green-400{--tw-bg-opacity:1;background-color:rgb(74 222 128 / var(--tw-bg-opacity, 1))}.bg-red-400{--tw-bg-opacity:1;background-color:rgb(248 113 113 / var(--tw-bg-opacity, 1))}.bg-slate-100{--tw-bg-opacity:1;background-color:rgb(241 245 249 / var(--tw-bg-opacity, 1))}.bg-slate-200{--tw-bg-opacity:1;background-color:rgb(226 232 240 / var(--tw-bg-opacity, 1))}.bg-slate-50{--tw-bg-opacity:1;background-color:rgb(248 250 252 / var(--tw-bg-opacity, 1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-yellow-400{--tw-bg-opacity:1;background-color:rgb(250 204 21 / var(--tw-bg-opacity, 1))}.p-0{padding:0px}.p-1{padding:0.25rem}.p-2{padding:0.5rem}.p-2\.5{padding:0.625rem}.p-3\.5{padding:0.875rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-6{padding:1.5rem}.px-1{padding-left:0.25rem;padding-right:0.25rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-3\.5{padding-left:0.875rem;padding-right:0.875rem}.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-2\.5{padding-top:0.625rem;padding-bottom:0.625rem}.py-4{padding-top:1rem;padding-bottom:1rem}.pb-1{padding-bottom:0.25rem}.pb-12{padding-bottom:3rem}.pb-6{padding-bottom:1.5rem}.pl-3{padding-left:0.75rem}.pl-4{padding-left:1rem}.pt-3{padding-top:0.75rem}.text-center{text-align:center}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-\[10px\]{font-size:10px}.text-\[8px\]{font-size:8px}.text-\[9px\]{font-size:9px}.text-base{font-size:1rem;line-height:1.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-extrabold{font-weight:800}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.leading-none{line-height:1}.leading-relaxed{line-height:1.625}.tracking-tight{letter-spacing:-0.025em}.tracking-wide{letter-spacing:0.025em}.tracking-wider{letter-spacing:0.05em}.tracking-widest{letter-spacing:0.1em}.text-\[\#0dcaf0\]{--tw-text-opacity:1;color:rgb(13 202 240 / var(--tw-text-opacity, 1))}.text-amber-800{--tw-text-opacity:1;color:rgb(146 64 14 / var(--tw-text-opacity, 1))}.text-emerald-200{--tw-text-opacity:1;color:rgb(167 243 208 / var(--tw-text-opacity, 1))}.text-emerald-300{--tw-text-opacity:1;color:rgb(110 231 183 / var(--tw-text-opacity, 1))}.text-emerald-500{--tw-text-opacity:1;color:rgb(16 185 129 / var(--tw-text-opacity, 1))}.text-emerald-700{--tw-text-opacity:1;color:rgb(4 120 87 / var(--tw-text-opacity, 1))}.text-emerald-800\/80{color:rgb(6 95 70 / 0.8)}.text-emerald-900{--tw-text-opacity:1;color:rgb(6 78 59 / var(--tw-text-opacity, 1))}.text-emerald-950{--tw-text-opacity:1;color:rgb(2 44 34 / var(--tw-text-opacity, 1))}.text-red-600{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.text-slate-500{--tw-text-opacity:1;color:rgb(100 116 139 / var(--tw-text-opacity, 1))}.text-slate-600{--tw-text-opacity:1;color:rgb(71 85 105 / var(--tw-text-opacity, 1))}.text-slate-700{--tw-text-opacity:1;color:rgb(51 65 85 / var(--tw-text-opacity, 1))}.text-slate-800{--tw-text-opacity:1;color:rgb(30 41 59 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.underline{-webkit-text-decoration-line:underline;text-decoration-line:underline}.shadow{--tw-shadow:0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgb(0 0 0 / 0.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-inner{--tw-shadow:inset 0 2px 4px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:inset 0 2px 4px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-md{--tw-shadow:0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-xl{--tw-shadow:0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 20px 25px -5px var(--tw-shadow-color), 0 8px 10px -6px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.outline-none{outline:2px solid transparent;outline-offset:2px}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition{transition-property:color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-300{transition-duration:300ms}.hover\:bg-emerald-200:hover{--tw-bg-opacity:1;background-color:rgb(167 243 208 / var(--tw-bg-opacity, 1))}.hover\:bg-emerald-600:hover{--tw-bg-opacity:1;background-color:rgb(5 150 105 / var(--tw-bg-opacity, 1))}.hover\:bg-emerald-800:hover{--tw-bg-opacity:1;background-color:rgb(6 95 70 / var(--tw-bg-opacity, 1))}.hover\:bg-slate-300:hover{--tw-bg-opacity:1;background-color:rgb(203 213 225 / var(--tw-bg-opacity, 1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.hover\:underline:hover{-webkit-text-decoration-line:underline;text-decoration-line:underline}.focus\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-\[\#198754\]:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(25 135 84 / var(--tw-ring-opacity, 1))}@media (min-width: 640px){.sm\:flex-row{flex-direction:row}.sm\:items-center{align-items:center}}@media (min-width: 768px){.md\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.md\:flex-row{flex-direction:row}.md\:p-6{padding:1.5rem}}@media (min-width: 1024px){.lg\:col-span-5{grid-column:span 5 / span 5}.lg\:grid-cols-12{grid-template-columns:repeat(12, minmax(0, 1fr))}}</style></head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- TOP HEADER / BRANDING -->
+    <header class="bg-[#0d3a22] text-white py-4.5 px-6 shadow-md border-b-4 border-[#0dcaf0]">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3 select-none">
+                <div class="bg-[#0dcaf0]/15 p-2.5 rounded-2xl border border-[#0dcaf0]/20 shadow-inner">
+                    <svg class="w-8 h-8 text-[#0dcaf0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-11.314l.707.707m11.314 11.314l.707-.707M12 5c-3.866 0-7 3.134-7 7 0 3.5 6 10 7 10s7-6.5 7-10c0-3.866-3.134-7-7-7z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <!-- DYNAMIC APP NAME LOADED FROM SETTINGS -->
+                    <h1 id="app-main-title" class="text-3xl font-extrabold tracking-tight">Agua Verde</h1>
+                    <p class="text-xs text-emerald-300 font-bold uppercase tracking-widest">SISTEMA INTEGRAL DE CONTROL DE INVENTARIO</p>
+                </div>
+            </div>
+            
+            <!-- Controls / Mode Switcher -->
+            <div class="flex flex-wrap gap-2 items-center">
+                <!-- Mode Selector Buttons -->
+                <div class="bg-emerald-950/60 p-1 rounded-xl border border-emerald-800/40 flex shadow-inner">
+                    <button id="btn-mode-simulator" onclick="switchAppMode(&#39;simulator&#39;)" class="px-3.5 py-2 rounded-lg text-xs font-bold transition-all bg-[#198754] text-white">
+                        🔌 Simulador de Dispositivos (3 Pantallas)
+                    </button>
+                    <button id="btn-mode-fullscreen" onclick="switchAppMode(&#39;fullscreen&#39;)" class="px-3.5 py-2 rounded-lg text-xs font-bold transition-all text-emerald-200 hover:text-white">
+                        📱 App de Trabajo Única
+                    </button>
+                </div>
+                
+                <!-- Database Configuration Button -->
+                <button onclick="toggleConfigModal(true)" class="bg-[#198754] hover:bg-emerald-600 text-white border border-emerald-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow">
+                    <svg class="w-4 h-4 text-[#0dcaf0]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Bases de Datos (Gratis)
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container" class="fixed top-5 right-5 z-55 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- MAIN BODY CONTAINER -->
+    <main class="flex-grow p-4 md:p-6 max-w-7xl w-full mx-auto flex flex-col gap-6">
+        
+        <!-- CONNECTION STATUS BANNER -->
+        <div id="connection-status-banner" class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm">
+            <div class="flex items-start gap-3 border-l-4 border-[#0dcaf0] pl-3">
+                <span id="db-status-badge" class="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 shrink-0">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    SIMULADOR LOCAL
+                </span>
+                <div>
+                    <p class="text-sm font-bold text-emerald-950" id="status-text">Base de datos de prueba para "Agua Verde" activa.</p>
+                    <p class="text-xs text-emerald-800/80">Puedes probar el traspaso entre sectores, el bloqueo por saldo negativo y justificaciones de mermas.</p>
+                </div>
+            </div>
+            <button onclick="toggleConfigModal(true)" class="text-xs font-bold text-emerald-950 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 px-3.5 py-2 rounded-xl transition shrink-0">
+                🚀 Conectar Base de Datos Gratis (Supabase)
+            </button>
+        </div>
+
+        <!-- SIMULATOR SECTION (SIDE-BY-SIDE DEVICES) -->
+        <section id="section-simulator" class="flex flex-col gap-6 transition-all duration-300">
+            <!-- Instructions and Cheat Sheet -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs bg-emerald-900/5 p-4 rounded-2xl border border-emerald-900/10">
+                <div class="flex items-start gap-2.5">
+                    <span class="bg-emerald-800 text-white w-5 h-5 rounded-full flex items-center justify-center font-extrabold shrink-0">1</span>
+                    <div>
+                        <strong class="text-emerald-950 block">Dueño (Roberto - DUE12)</strong>
+                        <span class="text-slate-600">Tiene acceso total. Cambia el nombre de la app, agrega sectores, descarga Excel y purga el histórico de auditoría secreto.</span>
+                    </div>
+                </div>
+                <div class="flex items-start gap-2.5">
+                    <span class="bg-[#198754] text-white w-5 h-5 rounded-full flex items-center justify-center font-extrabold shrink-0">2</span>
+                    <div>
+                        <strong class="text-emerald-950 block">Administrador (Clara - ADM11)</strong>
+                        <span class="text-slate-600">Maneja 1. Cocina Restaurant. Traspasa carne a la Parrilla, copia stock, genera códigos de 4-6 chars y los comparte.</span>
+                    </div>
+                </div>
+                <div class="flex items-start gap-2.5">
+                    <span class="bg-[#0dcaf0] text-emerald-950 w-5 h-5 rounded-full flex items-center justify-center font-extrabold shrink-0">3</span>
+                    <div>
+                        <strong class="text-emerald-950 block">Personal (Mateo - STF11)</strong>
+                        <span class="text-slate-600">Mateo opera en Cocina. Carga mercadería (elige kg o u), actualiza stock. Bloqueado si el stock queda en negativo.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- The Grid of Devices -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                <!-- DEVICE 1: LAPTOP / TABLET VIEW (OWNER) - TAKES 5 COLS -->
+                <div class="lg:col-span-5 flex flex-col gap-2">
+                    <div class="flex justify-between items-center px-1 select-none">
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                            💻 Monitor de Auditoría Secreta (PC Dueño)
+                        </span>
+                        <span class="text-[10px] bg-emerald-100 text-emerald-950 font-bold px-2 py-0.5 rounded-lg border border-emerald-200">Acceso: DUE12</span>
+                    </div>
+                    
+                    <div class="bg-white border-4 border-slate-300 rounded-2xl shadow-xl overflow-hidden min-h-[670px] flex flex-col">
+                        <!-- Simulated PC Browser bar -->
+                        <div class="bg-slate-100 border-b border-slate-200 px-4 py-2 flex items-center gap-2 text-xs text-slate-500 select-none">
+                            <div class="flex gap-1.5">
+                                <span class="w-3 h-3 rounded-full bg-red-400"></span>
+                                <span class="w-3 h-3 rounded-full bg-yellow-400"></span>
+                                <span class="w-3 h-3 rounded-full bg-green-400"></span>
+                            </div>
+                            <div class="bg-white px-3 py-0.5 rounded border border-slate-200 flex-grow text-[10px] text-center truncate font-mono">
+                                https://agua-verde.chacra/admin/audit-logs
+                            </div>
+                        </div>
+                        
+                        <!-- PC Workspace screen content -->
+                        <div id="screen-owner" class="flex-grow flex flex-col h-[610px] overflow-y-auto">
+                            <!-- Rendered Dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DEVICE 2: IPHONE FRAME (ADMIN COCO) - TAKES 3.5 COLS -->
+                <div class="lg:col-span-3.5 flex flex-col gap-2">
+                    <div class="flex justify-between items-center px-1 select-none">
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                            🍎 iPhone Administrador (Sectorizado)
+                        </span>
+                        <span class="text-[10px] bg-emerald-100 text-emerald-950 font-bold px-2 py-0.5 rounded-lg border border-emerald-200">Acceso: ADM11</span>
+                    </div>
+                    
+                    <div class="phone-frame w-full max-w-[340px] mx-auto h-[670px]">
+                        <div class="phone-notch"></div>
+                        <div class="phone-home-indicator"></div>
+                        
+                        <!-- iOS status bar -->
+                        <div class="bg-emerald-950 text-white text-[9px] px-5 pt-4.5 pb-1 flex justify-between items-center font-semibold select-none">
+                            <span>09:41 AM</span>
+                            <div class="flex gap-1 items-center font-bold">
+                                <span>WiFi</span>
+                                <span>LTE</span>
+                                <span class="border border-white/40 px-1 py-0.2 rounded text-[8px] bg-[#198754]">100%</span>
+                            </div>
+                        </div>
+                        
+                        <!-- iPhone Content Space -->
+                        <div id="screen-admin" class="h-[590px] overflow-y-auto bg-slate-50 flex flex-col text-xs pb-6">
+                            <!-- Rendered Dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DEVICE 3: ANDROID FRAME (STAFF COCO) - TAKES 3.5 COLS -->
+                <div class="lg:col-span-3.5 flex flex-col gap-2">
+                    <div class="flex justify-between items-center px-1 select-none">
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                            🤖 Celular Personal (Android Staff)
+                        </span>
+                        <span class="text-[10px] bg-emerald-100 text-emerald-950 font-bold px-2 py-0.5 rounded-lg border border-emerald-200">Acceso: STF11</span>
+                    </div>
+                    
+                    <div class="phone-frame w-full max-w-[340px] mx-auto h-[670px]">
+                        <div class="android-punch"></div>
+                        
+                        <!-- Android System bar -->
+                        <div class="android-bar font-bold select-none">
+                            <span class="lbl-dyn-appname">🌿 Agua Verde</span>
+                            <div class="flex gap-1 items-center text-[8px]">
+                                <span>95%</span>
+                                <span>09:41</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Android Content Space -->
+                        <div id="screen-staff" class="h-[602px] overflow-y-auto bg-slate-50 flex flex-col text-xs pb-12">
+                            <!-- Rendered Dynamically -->
+                        </div>
+                        
+                        <!-- Android bottom buttons mockup -->
+                        <div class="absolute bottom-0 left-0 right-0 h-10 bg-emerald-950 flex justify-around items-center text-emerald-500 text-xs select-none border-t border-emerald-900">
+                            <span class="w-3.5 h-3.5 border-2 border-emerald-700 rounded-sm"></span>
+                            <span class="w-3.5 h-3.5 border-2 border-emerald-700 rounded-full"></span>
+                            <span class="text-base font-bold text-emerald-700">◁</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- FULL SCREEN INDIVIDUAL APP SECTION -->
+        <section id="section-fullscreen" class="hidden flex-col gap-6 max-w-md mx-auto w-full transition-all duration-300">
+            <div class="bg-white border border-emerald-800/10 rounded-3xl shadow-2xl overflow-hidden min-h-[630px] flex flex-col">
+                <div class="bg-[#0d3a22] text-white p-5 flex justify-between items-center border-b-2 border-[#0dcaf0]/20">
+                    <div class="flex items-center gap-2">
+                        <span class="bg-[#0dcaf0]/20 p-2 rounded-xl text-white">🛖</span>
+                        <div>
+                            <h2 class="font-extrabold text-base tracking-tight leading-none mb-1 lbl-dyn-appname">Agua Verde</h2>
+                            <p class="text-[9px] text-emerald-300 font-bold uppercase tracking-wider">Control de Acceso General</p>
+                        </div>
+                    </div>
+                    <span id="fs-badge" class="bg-[#0dcaf0]/15 text-[#0dcaf0] px-2.5 py-0.5 rounded-full text-[9px] font-bold border border-[#0dcaf0]/25">DEMO</span>
+                </div>
+                
+                <!-- Main Fullscreen Screen Content -->
+                <div id="screen-fullscreen-app" class="flex-grow flex flex-col bg-slate-50 p-0 min-h-[510px]">
+                    <!-- Rendered Dynamically -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+
+    <!-- DATABASE CONFIGURATION MODAL -->
+    <div id="modal-config" class="fixed inset-0 bg-black/70 z-55 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden border border-emerald-950/25 animate-pop-up">
+            <!-- Modal Header -->
+            <div class="bg-[#0d3a22] text-white p-5 flex justify-between items-center border-b-2 border-[#0dcaf0]/20">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">⚡</span>
+                    <div>
+                        <h3 class="font-extrabold text-lg">Base de Datos en Tiempo Real</h3>
+                        <p class="text-xs text-emerald-300">Conecta tu plan gratuito de Supabase</p>
+                    </div>
+                </div>
+                <button onclick="toggleConfigModal(false)" class="text-emerald-300 hover:text-white font-bold text-2xl leading-none">×</button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="p-6 space-y-4 text-xs max-h-[420px] overflow-y-auto">
+                <div class="bg-emerald-50 border border-emerald-100 text-emerald-950 p-3.5 rounded-2xl flex gap-2.5">
+                    <span class="text-lg">✨</span>
+                    <p class="leading-relaxed font-semibold">
+                        Para habilitar la app en teléfonos reales en tu chacra, debes conectarla a una base de datos. <strong>Supabase</strong> es una opción gratuita y súper rápida que se configura en minutos.
+                    </p>
+                </div>
+                
+                <!-- Credentials Form -->
+                <div class="space-y-3.5">
+                    <div>
+                        <label class="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">Supabase Project URL</label>
+                        <input type="text" id="input-sb-url" placeholder="https://xxxxxxxxxxxxxxxxxxxx.supabase.co" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#198754]">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">Supabase Anon Public Key</label>
+                        <input type="password" id="input-sb-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#198754]">
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-100 pt-3">
+                    <h4 class="font-bold text-slate-800 uppercase mb-1.5 flex items-center gap-1">
+                        <span>📋</span> Pasos Rápidos de Inicialización:
+                    </h4>
+                    <ol class="text-slate-600 list-decimal pl-4 space-y-1.5">
+                        <li>Crea un proyecto gratis en <a href="https://supabase.com/" target="_blank" class="text-emerald-700 font-bold underline">supabase.com</a>.</li>
+                        <li>Entra a la sección <strong>SQL Editor</strong> -&gt; haz clic en <strong>New Query</strong>.</li>
+                        <li>Copia el contenido del archivo <code class="font-mono text-emerald-900 bg-emerald-100/60 px-1 rounded">supabase_schema.sql</code>, pégalo allí y dale a <strong>Run</strong>.</li>
+                        <li>Ve a <strong>Project Settings</strong> (engranaje) -&gt; <strong>API</strong> para obtener tus claves "Project URL" y "Anon Key" y pégalas aquí arriba.</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-slate-50 px-6 py-4 flex justify-between items-center border-t border-slate-100">
+                <button onclick="clearSupabaseConfig()" class="text-xs font-bold text-red-600 hover:underline">
+                    ❌ Limpiar Credenciales (Volver a Demo)
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="toggleConfigModal(false)" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold hover:bg-slate-300">
+                        Cancelar
+                    </button>
+                    <button onclick="saveSupabaseConfig()" class="bg-[#0f5132] hover:bg-emerald-800 text-white px-4 py-2 rounded-xl font-bold shadow-md transition">
+                        Guardar y Conectar ⚡
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- JAVASCRIPT APPLICATION CODE -->
+    <script>
+        // ==========================================
+        // SEEDING REQUISITE SECTORS & DEMO CODES
+        // ==========================================
+        let isLiveSupabase = false;
+        let supabaseClient = null;
+
+        // Custom config settings state (modifiable dynamically by owner)
+        let systemSettings = {
+            app_name: "Agua Verde",
+            low_stock_threshold: 5,
+            large_adjustment_threshold: 5
+        };
+
+        const INITIAL_MOCK_DB = {
+            sectors: [
+                { id: '11111111-1111-1111-1111-111111111111', name: '1. Cocina Restaurant' },
+                { id: '22222222-2222-2222-2222-222222222222', name: '2. Cocina de Eventos' },
+                { id: '33333333-3333-3333-3333-333333333333', name: '3. Cocina de Personal' },
+                { id: '44444444-4444-4444-4444-444444444444', name: '4. Parrilla' },
+                { id: '55555555-5555-5555-5555-555555555555', name: '5. Barras' },
+                { id: '66666666-6666-6666-6666-666666666666', name: '6. Administración' },
+                { id: '77777777-7777-7777-7777-777777777777', name: '7. Campo' },
+                { id: '88888888-8888-8888-8888-888888888888', name: '8. Mucamas - Limpieza' }
+            ],
+            access_codes: [
+                { id: 'c-1', code: 'DUE12', name: 'Don Roberto', role: 'owner', sector_id: null, active: true, can_view_all: true },
+                { id: 'c-2', code: 'ADM11', name: 'Clara Gómez', role: 'admin', sector_id: '11111111-1111-1111-1111-111111111111', active: true, can_view_all: false },
+                { id: 'c-3', code: 'STF11', name: 'Mateo Ruiz', role: 'staff', sector_id: '11111111-1111-1111-1111-111111111111', active: true, can_view_all: false },
+                { id: 'c-4', code: 'ADM55', name: 'Santi Sosa', role: 'admin', sector_id: '55555555-5555-5555-5555-555555555555', active: true, can_view_all: false },
+                { id: 'c-5', code: 'STF55', name: 'Leo Paez', role: 'staff', sector_id: '55555555-5555-5555-5555-555555555555', active: true, can_view_all: false }
+            ],
+            merchandise: [
+                { id: 'm-1', sector_id: '11111111-1111-1111-1111-111111111111', name: 'Carne de Vacío', quantity: 20, unit: 'kg', active: true, updated_by: 'Clara Gómez (ADM11)', created_at: new Date(Date.now() - 3600000*12).toISOString(), updated_at: new Date().toISOString() },
+                { id: 'm-2', sector_id: '11111111-1111-1111-1111-111111111111', name: 'Tomates Redondos', quantity: 3, unit: 'kg', active: true, updated_by: 'Mateo Ruiz (STF11)', created_at: new Date(Date.now() - 3600000*24).toISOString(), updated_at: new Date().toISOString() }, // LOW STOCK
+                { id: 'm-3', sector_id: '11111111-1111-1111-1111-111111111111', name: 'Harina de Trigo', quantity: 50, unit: 'kg', active: true, updated_by: 'Clara Gómez (ADM11)', created_at: new Date(Date.now() - 3600000*8).toISOString(), updated_at: new Date().toISOString() },
+                { id: 'm-4', sector_id: '55555555-5555-5555-5555-555555555555', name: 'Cerveza Lager', quantity: 120, unit: 'u', active: true, updated_by: 'Santi Sosa (ADM55)', created_at: new Date(Date.now() - 3600000*48).toISOString(), updated_at: new Date().toISOString() },
+                { id: 'm-5', sector_id: '55555555-5555-5555-5555-555555555555', name: 'Agua Mineral sin gas', quantity: 4, unit: 'u', active: true, updated_by: 'Leo Paez (STF55)', created_at: new Date(Date.now() - 3600000*48).toISOString(), updated_at: new Date().toISOString() }, // LOW STOCK
+                { id: 'm-6', sector_id: '88888888-8888-8888-8888-888888888888', name: 'Jabón Líquido', quantity: 15, unit: 'u', active: true, updated_by: 'Don Roberto (DUE12)', created_at: new Date(Date.now() - 3600000*72).toISOString(), updated_at: new Date().toISOString() }
+            ],
+            inventory_history: [
+                { id: 'h-1', merchandise_id: 'm-1', sector_id: '11111111-1111-1111-1111-111111111111', sector_name: '1. Cocina Restaurant', merchandise_name: 'Carne de Vacío', action: 'create', quantity_before: null, quantity_after: 20, details: 'Carga inicial para restaurant de fin de semana', user_code: 'ADM11', user_name: 'Clara Gómez', created_at: new Date(Date.now() - 3600000*4).toISOString() },
+                { id: 'h-2', merchandise_id: 'm-2', sector_id: '11111111-1111-1111-1111-111111111111', sector_name: '1. Cocina Restaurant', merchandise_name: 'Tomates Redondos', action: 'update', quantity_before: 15, quantity_after: 3, details: 'Consumo para ensaladas del almuerzo [Motivo de egreso: Venta / Consumo de Cliente]', user_code: 'STF11', user_name: 'Mateo Ruiz', created_at: new Date(Date.now() - 3600000*1).toISOString() }
+            ]
+        };
+
+        function getMockDb() {
+            let db = localStorage.getItem('agua_verde_db_pro');
+            if (!db) {
+                localStorage.setItem('agua_verde_db_pro', JSON.stringify(INITIAL_MOCK_DB));
+                return INITIAL_MOCK_DB;
+            }
+            return JSON.parse(db);
+        }
+
+        function saveMockDb(db) {
+            localStorage.setItem('agua_verde_db_pro', JSON.stringify(db));
+            // Trigger local sync event
+            window.dispatchEvent(new CustomEvent('agua-verde-realtime-update-pro'));
+        }
+
+        // ==========================================
+        // ACTIVE SESSION STATE
+        // ==========================================
+        let activeSessions = {
+            owner: { code: 'DUE12', name: 'Don Roberto', first_name: 'Don', last_name: 'Roberto', role: 'owner', sector_id: null, can_view_all: true },
+            admin: { code: 'ADM11', name: 'Clara Gómez', first_name: 'Clara', last_name: 'Gómez', role: 'admin', sector_id: '11111111-1111-1111-1111-111111111111', can_view_all: false },
+            staff: { code: 'STF11', name: 'Mateo Ruiz', first_name: 'Mateo', last_name: 'Ruiz', role: 'staff', sector_id: '11111111-1111-1111-1111-111111111111', can_view_all: false },
+            fullscreen: null // Logs in dynamically
+        };
+
+        // Screen Active Tabs
+        let activeTabs = {
+            owner: 'inventory', // inventory, history, codes, sectors, config
+            admin: 'inventory', // inventory, codes, history
+            staff: 'inventory'
+        };
+
+        let ownerSelectedSectorFilter = 'all';
+        let currentAppDisplayMode = 'simulator';
+
+        // ==========================================
+        // APP INITIALIZATION
+        // ==========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            initSupabaseClient();
+            loadSettings();
+            renderAllScreens();
+
+            // Realtime simulation listeners
+            window.addEventListener('agua-verde-realtime-update-pro', () => {
+                showToast("⚡ Actualización en Tiempo Real", "Los datos se han sincronizado entre todos tus dispositivos.", "success");
+                loadSettings();
+                renderAllScreens();
+            });
+        });
+
+        // Load Settings from Local/Supabase config
+        async function loadSettings() {
+            let stored = localStorage.getItem('agua_verde_settings');
+            if (stored) {
+                systemSettings = JSON.parse(stored);
+            } else {
+                localStorage.setItem('agua_verde_settings', JSON.stringify(systemSettings));
+            }
+
+            // Sync with Supabase settings table if connected
+            if (isLiveSupabase && supabaseClient) {
+                try {
+                    const { data, error } = await supabaseClient.from('app_settings').select('val').eq('id', 'config').single();
+                    if (data && data.val) {
+                        systemSettings = data.val;
+                        localStorage.setItem('agua_verde_settings', JSON.stringify(systemSettings));
+                    }
+                } catch (e) {
+                    console.error("Error al cargar settings desde Supabase:", e);
+                }
+            }
+
+            updateDynamicAppBranding();
+        }
+
+        function updateDynamicAppBranding() {
+            document.title = `${systemSettings.app_name} — Inventario Realtime PRO`;
+            const headerTitle = document.getElementById('app-main-title');
+            if (headerTitle) headerTitle.innerText = systemSettings.app_name;
+
+            const sublabels = document.querySelectorAll('.lbl-dyn-appname');
+            sublabels.forEach(lbl => {
+                lbl.innerText = `🌿 ${systemSettings.app_name}`;
+            });
+        }
+
+        function initSupabaseClient() {
+            let url = localStorage.getItem('SUPABASE_URL');
+            let key = localStorage.getItem('SUPABASE_KEY');
+            
+            // Credenciales incrustadas de Don Roberto (Agua Verde)
+            if (!url) {
+                url = 'https://rlstizjvlreskttbzsza.supabase.co';
+                localStorage.setItem('SUPABASE_URL', url);
+            }
+            if (!key) {
+                key = 'sb_publishable_7wGCQASPYs3i7skA0HusKQ_vnYOqS-m';
+                localStorage.setItem('SUPABASE_KEY', key);
+            }
+            
+            const badge = document.getElementById('db-status-badge');
+            const bannerText = document.getElementById('status-text');
+            const fsBadge = document.getElementById('fs-badge');
+
+            if (url && key) {
+                try {
+                    supabaseClient = supabase.createClient(url, key);
+                    isLiveSupabase = true;
+                    
+                    badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span> CONECTADO A SUPABASE`;
+                    badge.className = "bg-emerald-950 text-emerald-200 px-3 py-1 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 shrink-0 border border-emerald-800";
+                    bannerText.innerHTML = "Tu aplicación está conectada a tu Base de Datos en la nube de Supabase.";
+                    if (fsBadge) fsBadge.innerHTML = "SUPABASE LIVE";
+                    
+                    setupSupabaseRealtime();
+                    fetchAndSyncFromSupabase();
+                    
+                } catch (e) {
+                    console.error("Error al conectar Supabase:", e);
+                    isLiveSupabase = false;
+                    localStorage.removeItem('SUPABASE_URL');
+                    localStorage.removeItem('SUPABASE_KEY');
+                    showToast("Error de Conexión", "No se pudo conectar a Supabase. Iniciando en Modo Demo.", "error");
+                }
+            } else {
+                isLiveSupabase = false;
+                badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span> SIMULADOR LOCAL`;
+                badge.className = "bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 shrink-0 border border-amber-200";
+                bannerText.innerHTML = "Ejecutando en Modo Simulador Local. Perfecto para pruebas rápidas.";
+                if (fsBadge) fsBadge.innerHTML = "DEMO LOCAL";
+            }
+        }
+
+        // Live Database Realtime listeners
+        function setupSupabaseRealtime() {
+            if (!supabaseClient) return;
+
+            supabaseClient.channel('agua-verde-channel-pro')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'merchandise' }, () => fetchAndSyncFromSupabase())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_history' }, () => fetchAndSyncFromSupabase())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'access_codes' }, () => fetchAndSyncFromSupabase())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'sectors' }, () => fetchAndSyncFromSupabase())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
+                    loadSettings();
+                    fetchAndSyncFromSupabase();
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        showToast("Sincronización Activa 📡", "Conectado a la base de datos de Agua Verde.", "success");
+                    }
+                });
+        }
+
+        async function fetchAndSyncFromSupabase() {
+            if (!isLiveSupabase || !supabaseClient) return;
+
+            try {
+                const { data: sectors } = await supabaseClient.from('sectors').select('*').order('name', { ascending: true });
+                const { data: access_codes } = await supabaseClient.from('access_codes').select('*');
+                const { data: merchandise } = await supabaseClient.from('merchandise').select('*');
+                const { data: history } = await supabaseClient.from('inventory_history').select('*').order('created_at', { ascending: false });
+
+                let dbObj = {
+                    sectors: sectors || [],
+                    access_codes: access_codes || [],
+                    merchandise: merchandise || [],
+                    inventory_history: history || []
+                };
+
+                localStorage.setItem('agua_verde_db_pro', JSON.stringify(dbObj));
+                renderAllScreens();
+                
+            } catch (err) {
+                console.error("Error en sincronización Supabase:", err);
+            }
+        }
+
+
+        // ==========================================
+        // DATABASE WRAPPER API (PRO FEATURES)
+        // ==========================================
+
+        async function db_validateCode(code, inputFirstName, inputLastName) {
+            const cleanCode = code.trim().toUpperCase();
+            const fullName = `${inputFirstName.trim()} ${inputLastName.trim()}`;
+
+            if (isLiveSupabase && supabaseClient) {
+                const { data, error } = await supabaseClient
+                    .from('access_codes')
+                    .select('*')
+                    .eq('code', cleanCode)
+                    .eq('active', true)
+                    .single();
+                
+                if (error || !data) return null;
+                return {
+                    code: data.code,
+                    name: fullName,
+                    first_name: inputFirstName,
+                    last_name: inputLastName,
+                    role: data.role,
+                    sector_id: data.sector_id,
+                    can_view_all: data.can_view_all
+                };
+            } else {
+                const db = getMockDb();
+                const found = db.access_codes.find(c => c.code.toUpperCase() === cleanCode && c.active);
+                if (!found) return null;
+                return {
+                    code: found.code,
+                    name: fullName,
+                    first_name: inputFirstName,
+                    last_name: inputLastName,
+                    role: found.role,
+                    sector_id: found.sector_id,
+                    can_view_all: found.can_view_all
+                };
+            }
+        }
+
+        async function db_getSectors() {
+            const db = getMockDb();
+            return db.sectors.sort((a,b) => a.name.localeCompare(b.name));
+        }
+
+        async function db_updateQuantity(merchId, delta, userSession, exitReason = "Ninguno", comment = "") {
+            const db = getMockDb();
+            const original = db.merchandise.find(m => m.id === merchId);
+            if (!original) return false;
+
+            const oldQty = parseFloat(original.quantity);
+            const newQty = oldQty + delta;
+
+            // 1. BLOCK NEGATIVE STOCKS
+            if (newQty < 0) {
+                showModalAlert("❌ Saldo Insuficiente", `Acción Bloqueada: No puedes retirar más mercadería de la existente en el inventario.<br><br><strong>Artículo:</strong> ${original.name}<br><strong>Stock Actual:</strong> ${oldQty} ${original.unit}<br><strong>Intento de retiro:</strong> ${Math.abs(delta)} ${original.unit}`);
+                return false;
+            }
+
+            // 2. LARGE ADJUSTMENT REQUIRED COMMENT CHECK
+            const absDelta = Math.abs(delta);
+            if (absDelta >= systemSettings.large_adjustment_threshold && !comment.trim()) {
+                openLargeAdjustmentPrompt(merchId, delta, userSession, exitReason, oldQty, original.name, original.unit);
+                return false;
+            }
+
+            const sector = db.sectors.find(s => s.id === original.sector_id);
+            const sectorName = sector ? sector.name : 'Desconocido';
+
+            let details = `Cantidad modificada de ${oldQty} a ${newQty} ${original.unit} por ${userSession.name}.`;
+            if (exitReason !== "Ninguno") {
+                details += ` [Motivo de egreso: ${exitReason}]`;
+            }
+            if (comment.trim()) {
+                details += ` [Nota: "${comment.trim()}"]`;
+            }
+
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient
+                    .from('merchandise')
+                    .update({ 
+                        quantity: newQty, 
+                        updated_by: `${userSession.name} (${userSession.code})`,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', merchId);
+
+                if (error) {
+                    showToast("Error", "Error al actualizar stock.", "error");
+                    return false;
+                }
+
+                await supabaseClient.from('inventory_history').insert([{
+                    merchandise_id: merchId,
+                    sector_id: original.sector_id,
+                    sector_name: sectorName,
+                    merchandise_name: original.name,
+                    action: 'update',
+                    quantity_before: oldQty,
+                    quantity_after: newQty,
+                    details: details,
+                    user_code: userSession.code,
+                    user_name: userSession.name
+                }]);
+
+                fetchAndSyncFromSupabase();
+            } else {
+                original.quantity = newQty;
+                original.updated_by = `${userSession.name} (${userSession.code})`;
+                original.updated_at = new Date().toISOString();
+
+                const log = {
+                    id: 'h-' + Math.random().toString(36).substr(2, 9),
+                    merchandise_id: merchId,
+                    sector_id: original.sector_id,
+                    sector_name: sectorName,
+                    merchandise_name: original.name,
+                    action: 'update',
+                    quantity_before: oldQty,
+                    quantity_after: newQty,
+                    details: details,
+                    user_code: userSession.code,
+                    user_name: userSession.name,
+                    created_at: new Date().toISOString()
+                };
+
+                db.inventory_history.push(log);
+                saveMockDb(db);
+            }
+            return true;
+        }
+
+        async function db_transferMerchandise(merchId, targetSectorId, qtyVal, userSession, comment = "") {
+            const transferQty = parseFloat(qtyVal);
+            if (isNaN(transferQty) || transferQty <= 0) {
+                showToast("Cantidad inválida", "La cantidad a traspasar debe ser mayor a cero.", "warning");
+                return false;
+            }
+
+            const db = getMockDb();
+            const sourceItem = db.merchandise.find(m => m.id === merchId);
+            if (!sourceItem) return false;
+
+            const oldSourceQty = parseFloat(sourceItem.quantity);
+            if (oldSourceQty < transferQty) {
+                showModalAlert("❌ Traspaso Fallido", `No hay suficiente stock en tu sector para realizar el traspaso.<br><br><strong>Disponible:</strong> ${oldSourceQty} ${sourceItem.unit}<br><strong>Intentado:</strong> ${transferQty} ${sourceItem.unit}`);
+                return false;
+            }
+
+            const sourceSec = db.sectors.find(s => s.id === sourceItem.sector_id);
+            const sourceSecName = sourceSec ? sourceSec.name : 'Sector de Origen';
+
+            const targetSec = db.sectors.find(s => s.id === targetSectorId);
+            const targetSecName = targetSec ? targetSec.name : 'Sector de Destino';
+
+            const newSourceQty = oldSourceQty - transferQty;
+            const targetItem = db.merchandise.find(m => m.sector_id === targetSectorId && m.name.toLowerCase() === sourceItem.name.toLowerCase() && m.active);
+
+            let logDetails = `Traspaso: Se enviaron ${transferQty} ${sourceItem.unit} desde "${sourceSecName}" hacia "${targetSecName}" por ${userSession.name}.`;
+            if (comment.trim()) {
+                logDetails += ` [Nota: "${comment}"]`;
+            }
+
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('merchandise').update({ quantity: newSourceQty, updated_by: `${userSession.name} (${userSession.code})`, updated_at: new Date().toISOString() }).eq('id', merchId);
+
+                if (targetItem) {
+                    const newTargetQty = parseFloat(targetItem.quantity) + transferQty;
+                    await supabaseClient.from('merchandise').update({ quantity: newTargetQty, updated_by: `${userSession.name} (${userSession.code})`, updated_at: new Date().toISOString() }).eq('id', targetItem.id);
+                } else {
+                    await supabaseClient.from('merchandise').insert([{
+                        sector_id: targetSectorId,
+                        name: sourceItem.name,
+                        quantity: transferQty,
+                        unit: sourceItem.unit,
+                        active: true,
+                        updated_by: `${userSession.name} (${userSession.code})`
+                    }]);
+                }
+
+                await supabaseClient.from('inventory_history').insert([{
+                    merchandise_id: merchId,
+                    sector_id: sourceItem.sector_id,
+                    sector_name: sourceSecName,
+                    merchandise_name: sourceItem.name,
+                    action: 'transfer',
+                    quantity_before: oldSourceQty,
+                    quantity_after: newSourceQty,
+                    details: logDetails,
+                    user_code: userSession.code,
+                    user_name: userSession.name
+                }]);
+
+                fetchAndSyncFromSupabase();
+            } else {
+                sourceItem.quantity = newSourceQty;
+                sourceItem.updated_by = `${userSession.name} (${userSession.code})`;
+                sourceItem.updated_at = new Date().toISOString();
+
+                if (targetItem) {
+                    targetItem.quantity = parseFloat(targetItem.quantity) + transferQty;
+                    targetItem.updated_by = `${userSession.name} (${userSession.code})`;
+                    targetItem.updated_at = new Date().toISOString();
+                } else {
+                    const freshItem = {
+                        id: 'm-' + Math.random().toString(36).substr(2, 9),
+                        sector_id: targetSectorId,
+                        name: sourceItem.name,
+                        quantity: transferQty,
+                        unit: sourceItem.unit,
+                        active: true,
+                        updated_by: `${userSession.name} (${userSession.code})`,
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    };
+                    db.merchandise.push(freshItem);
+                }
+
+                const log = {
+                    id: 'h-' + Math.random().toString(36).substr(2, 9),
+                    merchandise_id: merchId,
+                    sector_id: sourceItem.sector_id,
+                    sector_name: sourceSecName,
+                    merchandise_name: sourceItem.name,
+                    action: 'transfer',
+                    quantity_before: oldSourceQty,
+                    quantity_after: newSourceQty,
+                    details: logDetails,
+                    user_code: userSession.code,
+                    user_name: userSession.name,
+                    created_at: new Date().toISOString()
+                };
+
+                db.inventory_history.push(log);
+                saveMockDb(db);
+            }
+            return true;
+        }
+
+        async function db_addMerchandise(name, quantityVal, unit, sectorId, userSession) {
+            const qty = parseFloat(quantityVal);
+            
+            if (isNaN(qty) || qty <= 0 || !name.trim()) {
+                showModalAlert("⚠️ Acción Incorrecta", "No puedes registrar artículos vacíos o con cantidades menores o iguales a cero.");
+                return null;
+            }
+
+            const newMerch = {
+                name: name.trim(),
+                quantity: qty,
+                unit: unit,
+                sector_id: sectorId,
+                active: true,
+                updated_by: `${userSession.name} (${userSession.code})`,
+                updated_at: new Date().toISOString()
+            };
+
+            const db = getMockDb();
+            const sector = db.sectors.find(s => s.id === sectorId);
+            const sectorName = sector ? sector.name : 'Desconocido';
+
+            if (isLiveSupabase && supabaseClient) {
+                const { data: inserted, error } = await supabaseClient
+                    .from('merchandise')
+                    .insert([newMerch])
+                    .select()
+                    .single();
+                
+                if (error) {
+                    showToast("Error", "No se pudo registrar la mercadería.", "error");
+                    return null;
+                }
+
+                await supabaseClient.from('inventory_history').insert([{
+                    merchandise_id: inserted.id,
+                    sector_id: sectorId,
+                    sector_name: sectorName,
+                    merchandise_name: newMerch.name,
+                    action: 'create',
+                    quantity_before: null,
+                    quantity_after: newMerch.quantity,
+                    details: `Alta de mercadería (${newMerch.quantity} ${unit}) por operador ${userSession.name}`,
+                    user_code: userSession.code,
+                    user_name: userSession.name
+                }]);
+
+                fetchAndSyncFromSupabase();
+                return inserted;
+            } else {
+                newMerch.id = 'm-' + Math.random().toString(36).substr(2, 9);
+                newMerch.created_at = new Date().toISOString();
+                db.merchandise.push(newMerch);
+
+                const log = {
+                    id: 'h-' + Math.random().toString(36).substr(2, 9),
+                    merchandise_id: newMerch.id,
+                    sector_id: sectorId,
+                    sector_name: sectorName,
+                    merchandise_name: newMerch.name,
+                    action: 'create',
+                    quantity_before: null,
+                    quantity_after: newMerch.quantity,
+                    details: `Alta de mercadería (${newMerch.quantity} ${unit}) por operador ${userSession.name}`,
+                    user_code: userSession.code,
+                    user_name: userSession.name,
+                    created_at: new Date().toISOString()
+                };
+
+                db.inventory_history.push(log);
+                saveMockDb(db);
+                return newMerch;
+            }
+        }
+
+        async function db_deleteMerchandise(merchId, userSession) {
+            const db = getMockDb();
+            const item = db.merchandise.find(m => m.id === merchId);
+            if (!item) return;
+
+            const sector = db.sectors.find(s => s.id === item.sector_id);
+            const sectorName = sector ? sector.name : 'Desconocido';
+
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('merchandise').update({ active: false, updated_by: `${userSession.name} (${userSession.code})`, updated_at: new Date().toISOString() }).eq('id', merchId);
+
+                await supabaseClient.from('inventory_history').insert([{
+                    merchandise_id: merchId,
+                    sector_id: item.sector_id,
+                    sector_name: sectorName,
+                    merchandise_name: item.name,
+                    action: 'delete',
+                    quantity_before: item.quantity,
+                    quantity_after: 0,
+                    details: `Baja lógica de mercadería por administrador ${userSession.name}`,
+                    user_code: userSession.code,
+                    user_name: userSession.name
+                }]);
+
+                fetchAndSyncFromSupabase();
+            } else {
+                item.active = false;
+                item.updated_by = `${userSession.name} (${userSession.code})`;
+                item.updated_at = new Date().toISOString();
+
+                const log = {
+                    id: 'h-' + Math.random().toString(36).substr(2, 9),
+                    merchandise_id: merchId,
+                    sector_id: item.sector_id,
+                    sector_name: sectorName,
+                    merchandise_name: item.name,
+                    action: 'delete',
+                    quantity_before: item.quantity,
+                    quantity_after: 0,
+                    details: `Baja lógica de mercadería por administrador ${userSession.name}`,
+                    user_code: userSession.code,
+                    user_name: userSession.name,
+                    created_at: new Date().toISOString()
+                };
+
+                db.inventory_history.push(log);
+                saveMockDb(db);
+            }
+        }
+
+        async function db_restoreMerchandise(merchId, userSession) {
+            const db = getMockDb();
+            const item = db.merchandise.find(m => m.id === merchId);
+            if (!item) return;
+
+            const sector = db.sectors.find(s => s.id === item.sector_id);
+            const sectorName = sector ? sector.name : 'Desconocido';
+
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('merchandise').update({ active: true, updated_by: `${userSession.name} (${userSession.code})` }).eq('id', merchId);
+
+                await supabaseClient.from('inventory_history').insert([{
+                    merchandise_id: merchId,
+                    sector_id: item.sector_id,
+                    sector_name: sectorName,
+                    merchandise_name: item.name,
+                    action: 'restore',
+                    quantity_before: 0,
+                    quantity_after: item.quantity,
+                    details: `Restauración realizada por el Dueño: ${userSession.name}`,
+                    user_code: userSession.code,
+                    user_name: userSession.name
+                }]);
+
+                fetchAndSyncFromSupabase();
+            } else {
+                item.active = true;
+                item.updated_by = `${userSession.name} (${userSession.code})`;
+                item.updated_at = new Date().toISOString();
+
+                const log = {
+                    id: 'h-' + Math.random().toString(36).substr(2, 9),
+                    merchandise_id: merchId,
+                    sector_id: item.sector_id,
+                    sector_name: sectorName,
+                    merchandise_name: item.name,
+                    action: 'restore',
+                    quantity_before: 0,
+                    quantity_after: item.quantity,
+                    details: `Restauración realizada por el Dueño: ${userSession.name}`,
+                    user_code: userSession.code,
+                    user_name: userSession.name,
+                    created_at: new Date().toISOString()
+                };
+
+                db.inventory_history.push(log);
+                saveMockDb(db);
+            }
+        }
+
+        async function db_hardDeleteMerchandise(merchId) {
+            const db = getMockDb();
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('merchandise').delete().eq('id', merchId);
+                fetchAndSyncFromSupabase();
+            } else {
+                db.merchandise = db.merchandise.filter(m => m.id !== merchId);
+                db.inventory_history.forEach(h => { if (h.merchandise_id === merchId) h.merchandise_id = null; });
+                saveMockDb(db);
+            }
+        }
+
+        async function db_addSector(name) {
+            if (!name.trim()) return null;
+            const db = getMockDb();
+            
+            const exists = db.sectors.find(s => s.name.toUpperCase() === name.trim().toUpperCase());
+            if (exists) {
+                showToast("Ya existe", "Este sector ya está registrado.", "warning");
+                return null;
+            }
+
+            if (isLiveSupabase && supabaseClient) {
+                const { data, error } = await supabaseClient.from('sectors').insert([{ name: name.trim() }]).select().single();
+                if (error) return null;
+                fetchAndSyncFromSupabase();
+                return data;
+            } else {
+                const newSec = {
+                    id: 'sec-' + Math.random().toString(36).substr(2, 9),
+                    name: name.trim(),
+                    created_at: new Date().toISOString()
+                };
+                db.sectors.push(newSec);
+                saveMockDb(db);
+                return newSec;
+            }
+        }
+
+        async function db_deleteSector(sectorId) {
+            const db = getMockDb();
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('sectors').delete().eq('id', sectorId);
+                fetchAndSyncFromSupabase();
+            } else {
+                db.sectors = db.sectors.filter(s => s.id !== sectorId);
+                db.merchandise = db.merchandise.filter(m => m.sector_id !== sectorId);
+                db.access_codes = db.access_codes.filter(c => c.sector_id !== sectorId);
+                db.inventory_history = db.inventory_history.filter(h => h.sector_id !== sectorId);
+                saveMockDb(db);
+            }
+        }
+
+        async function db_clearHistoryLogs() {
+            const db = getMockDb();
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('inventory_history').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                fetchAndSyncFromSupabase();
+            } else {
+                db.inventory_history = [];
+                saveMockDb(db);
+            }
+        }
+
+        async function db_saveSettings(configObj) {
+            localStorage.setItem('agua_verde_settings', JSON.stringify(configObj));
+            systemSettings = configObj;
+
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('app_settings').upsert([{ id: 'config', val: configObj }]);
+                fetchAndSyncFromSupabase();
+            } else {
+                window.dispatchEvent(new CustomEvent('agua-verde-realtime-update-pro'));
+            }
+        }
+
+        async function db_createCode(codeText, name, role, sectorId) {
+            const cleanCode = codeText.trim().toUpperCase();
+            
+            if (cleanCode.length < 4 || cleanCode.length > 6) {
+                showModalAlert("⚠️ Código Inválido", "Error: El código de acceso debe tener obligatoriamente entre 4 y 6 caracteres.");
+                return null;
+            }
+
+            const db = getMockDb();
+            const exists = db.access_codes.find(c => c.code.toUpperCase() === cleanCode);
+            if (exists) {
+                showToast("Duplicado", "Este código ya está asignado.", "warning");
+                return null;
+            }
+
+            const newCode = {
+                code: cleanCode,
+                name: name.trim(),
+                role: role,
+                sector_id: sectorId,
+                active: true,
+                can_view_all: role === 'owner'
+            };
+
+            if (isLiveSupabase && supabaseClient) {
+                const { data, error } = await supabaseClient.from('access_codes').insert([newCode]).select().single();
+                if (error) {
+                    showToast("Error", "No se pudo registrar la clave.", "error");
+                    return null;
+                }
+                fetchAndSyncFromSupabase();
+                return data;
+            } else {
+                newCode.id = 'c-' + Math.random().toString(36).substr(2, 9);
+                newCode.created_at = new Date().toISOString();
+                db.access_codes.push(newCode);
+                saveMockDb(db);
+                return newCode;
+            }
+        }
+
+        async function db_toggleCodeActive(codeId, currentStatus) {
+            const db = getMockDb();
+            const newStatus = !currentStatus;
+
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('access_codes').update({ active: newStatus }).eq('id', codeId);
+                fetchAndSyncFromSupabase();
+            } else {
+                const target = db.access_codes.find(c => c.id === codeId);
+                if (target) {
+                    target.active = newStatus;
+                    saveMockDb(db);
+                }
+            }
+        }
+
+
+        // ==========================================
+        // SCREEN RENDERERS
+        // ==========================================
+
+        function renderAllScreens() {
+            renderOwnerScreen();
+            renderAdminScreen();
+            renderStaffScreen();
+            renderFullscreenScreen();
+        }
+
+        // --- 💻 MONITOR DEL PROPIETARIO (PC) ---
+        async function renderOwnerScreen() {
+            const container = document.getElementById('screen-owner');
+            if (!container) return;
+
+            const session = activeSessions.owner;
+            const tab = activeTabs.owner;
+            const db = getMockDb();
+
+            const activeItems = db.merchandise.filter(m => m.active);
+            const deletedItems = db.merchandise.filter(m => !m.active);
+
+            let html = `
+                <!-- Title Bar -->
+                <div class="bg-[#0d3a22] text-white p-4.5 flex justify-between items-center shrink-0 border-b border-[#0dcaf0]/25 select-none">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🏛️</span>
+                        <div>
+                            <h3 class="font-extrabold text-sm tracking-wide"><span class="lbl-dyn-appname">${systemSettings.app_name}</span> — Consolidado</h3>
+                            <p class="text-[9px] text-emerald-300 font-bold uppercase">Panel del Dueño (Acceso Total)</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="bg-[#0dcaf0]/20 text-[#0dcaf0] border border-[#0dcaf0]/30 font-bold text-[9px] px-2.5 py-0.5 rounded-full block">${session.name}</span>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <div class="bg-slate-50 border-b border-slate-200 px-4 flex gap-4 text-xs font-bold shrink-0 select-none">
+                    <button onclick="setTab('owner', 'inventory')" class="py-2.5 ${tab === 'inventory' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
+                        📦 Inventario
+                    </button>
+                    <button onclick="setTab('owner', 'history')" class="py-2.5 ${tab === 'history' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
+                        📜 Auditoría Secreta
+                    </button>
+                    <button onclick="setTab('owner', 'codes')" class="py-2.5 ${tab === 'codes' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
+                        🔑 Claves
+                    </button>
+                    <button onclick="setTab('owner', 'sectors')" class="py-2.5 ${tab === 'sectors' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
+                        🛖 Sectores
+                    </button>
+                    <button onclick="setTab('owner', 'config')" class="py-2.5 ${tab === 'config' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
+                        ⚙️ Configuración No-Code
+                    </button>
+                </div>
+
+                <div class="p-4 flex-grow space-y-4 overflow-y-auto">
+            `;
+
+            if (tab === 'inventory') {
+                html += `
+                    <!-- Statistics row -->
+                    <div class="grid grid-cols-4 gap-2.5 text-center select-none">
+                        <div class="bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl shadow-sm">
+                            <span class="text-[9px] uppercase font-bold text-emerald-800 block">Sectores</span>
+                            <span class="text-base font-extrabold text-slate-800">${db.sectors.length}</span>
+                        </div>
+                        <div class="bg-cyan-50 border border-cyan-100 p-2.5 rounded-xl shadow-sm">
+                            <span class="text-[9px] uppercase font-bold text-cyan-800 block">Stock Total</span>
+                            <span class="text-base font-extrabold text-slate-800">${activeItems.length}</span>
+                        </div>
+                        <div class="bg-red-50 border border-red-100 p-2.5 rounded-xl shadow-sm">
+                            <span class="text-[9px] uppercase font-bold text-red-800 block">Papelera</span>
+                            <span class="text-base font-extrabold text-slate-800">${deletedItems.length}</span>
+                        </div>
+                        
+                        <!-- EXCEL EXPORT BUTTON -->
+                        <button onclick="exportToExcel()" class="bg-emerald-800 hover:bg-emerald-700 text-white p-2 rounded-xl shadow-sm flex flex-col justify-center items-center transition">
+                            <span class="text-[9px] uppercase font-bold text-emerald-300 block">Exportar</span>
+                            <span class="text-[11px] font-extrabold flex items-center gap-0.5">📥 Excel</span>
+                        </button>
+                    </div>
+
+                    <!-- Filter Control -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex justify-between items-center gap-3">
+                        <div class="flex items-center gap-2 flex-grow">
+                            <label class="text-[10px] font-bold uppercase text-slate-500 shrink-0">Filtrar por Área:</label>
+                            <select onchange="setOwnerSectorFilter(this.value)" class="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-emerald-700 w-full max-w-xs font-semibold">
+                                <option value="all" ${ownerSelectedSectorFilter === 'all' ? 'selected' : ''}>🌍 Mostrar Todos</option>
+                                ${db.sectors.map(s => `<option value="${s.id}" ${ownerSelectedSectorFilter === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <button onclick="openAddMerchModal('owner')" class="bg-[#198754] hover:bg-emerald-600 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-sm shrink-0 transition">
+                            ➕ Alta de Artículo
+                        </button>
+                    </div>
+
+                    <!-- Items Table -->
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[9px] font-bold select-none">
+                                <tr>
+                                    <th class="p-2">Sector</th>
+                                    <th class="p-2">Artículo</th>
+                                    <th class="p-2 text-center">Stock</th>
+                                    <th class="p-2">Operador</th>
+                                    <th class="p-2 text-center">Ajustar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                const filtered = activeItems.filter(m => ownerSelectedSectorFilter === 'all' || m.sector_id === ownerSelectedSectorFilter);
+                if (filtered.length === 0) {
+                    html += `<tr><td colspan="5" class="p-6 text-center text-slate-400 italic">No hay productos en esta selección.</td></tr>`;
+                } else {
+                    filtered.forEach(item => {
+                        const secName = db.sectors.find(s => s.id === item.sector_id)?.name || 'Desconocido';
+                        const isLow = item.quantity <= systemSettings.low_stock_threshold;
+                        html += `
+                            <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                <td class="p-2 font-bold text-slate-500 truncate max-w-[100px]">${secName}</td>
+                                <td class="p-2">
+                                    <div class="font-bold text-slate-800">${item.name}</div>
+                                    <div class="text-[9px] text-slate-400 uppercase">${item.unit === 'kg' ? 'Kilos (kg)' : 'Unidades (u)'}</div>
+                                </td>
+                                <td class="p-2 text-center">
+                                    <span class="px-2 py-0.5 rounded-full font-bold ${isLow ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-slate-100 text-slate-800'}">
+                                        ${item.quantity} ${item.unit}
+                                    </span>
+                                    ${isLow ? '<span class="text-[8px] text-amber-600 font-bold block mt-0.5 animate-pulse">⚠️ STOCK MÍNIMO</span>' : ''}
+                                </td>
+                                <td class="p-2 text-[10px] text-slate-500">
+                                    <div class="font-bold truncate max-w-[110px]">${item.updated_by || 'Inicial'}</div>
+                                    <div class="text-[8px] text-slate-400">${new Date(item.updated_at).toLocaleTimeString()}</div>
+                                </td>
+                                <td class="p-2 text-center">
+                                    <div class="flex items-center justify-center gap-1">
+                                        <button onclick="adjustStock('${item.id}', -1, 'owner')" class="bg-red-50 hover:bg-red-100 text-red-700 w-6 h-6 rounded font-bold">-</button>
+                                        <button onclick="adjustStock('${item.id}', 1, 'owner')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 w-6 h-6 rounded font-bold">+</button>
+                                        <button onclick="openTransferModal('${item.id}', 'owner')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-1 rounded font-bold text-[9px]" title="Traspasar sector">🔄</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- PAPELERA - SOFT DELETED ITEMS -->
+                    <div class="bg-white border border-red-200 rounded-xl overflow-hidden shadow-sm mt-4">
+                        <div class="bg-red-50 border-b border-red-100 p-2.5 px-3 flex justify-between items-center select-none">
+                            <h4 class="text-[10px] font-extrabold text-red-950 uppercase flex items-center gap-1.5">
+                                🗑️ Papelera de Bajas Lógicas (Por Administradores)
+                            </h4>
+                            <span class="text-[9px] bg-red-100 text-red-800 font-bold px-2 py-0.5 rounded-full">Salvaguarda del Dueño</span>
+                        </div>
+                        <table class="w-full text-xs text-left">
+                            <tbody>
+                `;
+
+                const trashFiltered = deletedItems.filter(m => ownerSelectedSectorFilter === 'all' || m.sector_id === ownerSelectedSectorFilter);
+                if (trashFiltered.length === 0) {
+                    html += `<tr><td class="p-4 text-center text-slate-400 italic">No hay bajas temporales en este sector.</td></tr>`;
+                } else {
+                    trashFiltered.forEach(item => {
+                        const secName = db.sectors.find(s => s.id === item.sector_id)?.name || 'Desconocido';
+                        html += `
+                            <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                <td class="p-2.5 font-bold text-slate-700">${item.name} (${secName})</td>
+                                <td class="p-2.5 text-slate-500 font-medium">Stock anterior: ${item.quantity} ${item.unit}</td>
+                                <td class="p-2.5 text-right flex justify-end gap-1">
+                                    <button onclick="restoreItem('${item.id}', 'owner')" class="bg-emerald-800 hover:bg-emerald-700 text-white font-bold px-2 py-1 rounded text-[9px]">
+                                        Restaurar 🔄
+                                    </button>
+                                    <button onclick="hardDeleteItem('${item.id}', 'owner')" class="bg-red-600 hover:bg-red-700 text-white font-bold px-2 py-1 rounded text-[9px]">
+                                        Físico ❌
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+            } else if (tab === 'history') {
+                html += `
+                    <div class="bg-[#0d3a22]/5 border border-[#0d3a22]/10 p-3 rounded-xl flex justify-between items-center select-none">
+                        <div>
+                            <h4 class="text-xs font-bold text-[#0d3a22] uppercase">Bitácora Secreta de Auditoría</h4>
+                            <p class="text-[9px] text-slate-500">Solo tú tienes visibilidad de esta pestaña. Los empleados no saben que se registra todo.</p>
+                        </div>
+                        <button onclick="clearHistoryLogs()" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition">
+                            🚨 Vaciar Logs
+                        </button>
+                    </div>
+
+                    <div class="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                `;
+
+                if (db.inventory_history.length === 0) {
+                    html += `<div class="p-6 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">No hay registros de auditoría aún.</div>`;
+                } else {
+                    db.inventory_history.forEach(log => {
+                        let actionClass = "bg-slate-100 text-slate-800";
+                        let actionLabel = log.action.toUpperCase();
+
+                        if (log.action === 'create') { actionClass = "bg-emerald-100 text-emerald-850"; actionLabel = "ALTA"; }
+                        else if (log.action === 'update') { actionClass = "bg-sky-100 text-sky-850"; actionLabel = "STOCK"; }
+                        else if (log.action === 'delete') { actionClass = "bg-red-100 text-red-850"; actionLabel = "BAJA"; }
+                        else if (log.action === 'restore') { actionClass = "bg-purple-100 text-purple-850"; actionLabel = "RESTORE"; }
+                        else if (log.action === 'transfer') { actionClass = "bg-blue-100 text-blue-850"; actionLabel = "TRASPASO"; }
+
+                        html += `
+                            <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex flex-col gap-1 text-xs">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="px-1.5 py-0.2 rounded text-[8px] font-bold ${actionClass}">${actionLabel}</span>
+                                        <span class="font-extrabold text-slate-800">${log.merchandise_name}</span>
+                                    </div>
+                                    <span class="text-[8px] text-slate-400 font-semibold">${new Date(log.created_at).toLocaleString()}</span>
+                                </div>
+                                <p class="text-slate-600 text-[10.5px] font-semibold">${log.details}</p>
+                                <div class="text-[9px] text-slate-400">
+                                    Operador: <span class="font-bold text-slate-600">${log.user_name}</span> | Código: <span class="font-mono font-bold">${log.user_code}</span> | Sector: <span class="font-semibold">${log.sector_name}</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                html += `</div>`;
+
+            } else if (tab === 'codes') {
+                html += `
+                    <div class="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex justify-between items-center select-none">
+                        <div>
+                            <h4 class="text-xs font-bold text-emerald-950 uppercase">Claves de Acceso Autorizadas</h4>
+                            <p class="text-[9px] text-emerald-800">Longitud obligatoria de 4 a 6 caracteres.</p>
+                        </div>
+                        <button onclick="openAddCodeModal('owner')" class="bg-[#198754] hover:bg-emerald-600 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition shadow-sm">
+                            🔑 Nueva Clave
+                        </button>
+                    </div>
+
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[9px] font-bold select-none">
+                                <tr>
+                                    <th class="p-2">Código</th>
+                                    <th class="p-2">Colaborador</th>
+                                    <th class="p-2">Sector Asignado</th>
+                                    <th class="p-2">Nivel</th>
+                                    <th class="p-2 text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                db.access_codes.forEach(c => {
+                    const secName = db.sectors.find(s => s.id === c.sector_id)?.name || 'Consolidado General';
+                    let roleBadge = "bg-slate-100 text-slate-700";
+                    if (c.role === 'owner') roleBadge = "bg-amber-100 text-amber-800 border border-amber-200";
+                    else if (c.role === 'admin') roleBadge = "bg-emerald-100 text-emerald-800 border border-emerald-200";
+                    else if (c.role === 'staff') roleBadge = "bg-cyan-100 text-cyan-850 border border-cyan-200";
+
+                    html += `
+                        <tr class="border-b border-slate-100 hover:bg-slate-50">
+                            <td class="p-2 font-mono font-bold text-slate-800">${c.code}</td>
+                            <td class="p-2 font-semibold text-slate-700">${c.name}</td>
+                            <td class="p-2 text-slate-500">${secName}</td>
+                            <td class="p-2"><span class="px-1.5 py-0.2 rounded text-[8px] font-bold ${roleBadge}">${c.role.toUpperCase()}</span></td>
+                            <td class="p-2 text-center">
+                                <button onclick="toggleCodeStatus('${c.id}', ${c.active}, 'owner')" class="px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${c.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-red-100 text-red-800 border-red-300'}">
+                                    ${c.active ? 'ACTIVO' : 'ANULADO'}
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+            } else if (tab === 'sectors') {
+                html += `
+                    <div class="bg-slate-100 border border-slate-200 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 select-none">
+                        <div>
+                            <h4 class="text-xs font-bold text-slate-800 uppercase">Configuración Dinámica de Sectores</h4>
+                            <p class="text-[9px] text-slate-500">Agrega, edita o elimina áreas operativas de Agua Verde de inmediato.</p>
+                        </div>
+                        
+                        <div class="flex gap-1.5 w-full sm:w-auto">
+                            <input type="text" id="input-new-sector-name" placeholder="Ej: 9. Recepción" class="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-1 focus:ring-emerald-700 font-semibold w-full sm:w-36">
+                            <button onclick="handleAddNewSector()" class="bg-[#198754] hover:bg-emerald-600 text-white font-bold text-xs px-3 py-1 rounded-lg transition shrink-0">
+                                Crear 🛖
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[9px] font-bold select-none">
+                                <tr>
+                                    <th class="p-2.5">Nombre del Sector</th>
+                                    <th class="p-2.5 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                db.sectors.forEach(s => {
+                    html += `
+                        <tr class="border-b border-slate-100 hover:bg-slate-50">
+                            <td class="p-2.5 font-bold text-slate-800">${s.name}</td>
+                            <td class="p-2.5 text-right">
+                                <button onclick="handleDeleteSector('${s.id}')" class="text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-800 p-1 px-2.5 rounded font-bold text-[9px] transition">
+                                    Eliminar Sector 🗑️
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else if (tab === 'config') {
+                html += `
+                    <div class="bg-emerald-50 border border-emerald-100 p-3 rounded-xl select-none">
+                        <h4 class="text-xs font-bold text-emerald-950 uppercase">Personalización Total de la App (No-Code)</h4>
+                        <p class="text-[9px] text-emerald-800">Modifica parámetros clave del sistema de Agua Verde sin tocar ni una sola línea de código.</p>
+                    </div>
+
+                    <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 max-w-md mx-auto text-xs">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Nombre Comercial de la App</label>
+                            <input type="text" id="config-app-name" value="${systemSettings.app_name}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-700 font-bold">
+                            <p class="text-[9px] text-slate-400 mt-1">Este nombre se actualizará en las cabeceras de todos los celulares del personal.</p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-bold text-slate-700 mb-1">Stock de Alerta Mínimo</label>
+                                <input type="number" id="config-low-stock" value="${systemSettings.low_stock_threshold}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-700 font-semibold">
+                                <p class="text-[8px] text-slate-400 mt-1">Alerta si el stock cae por debajo de este valor.</p>
+                            </div>
+                            <div>
+                                <label class="block font-bold text-slate-700 mb-1">Umbral de Ajuste Grande</label>
+                                <input type="number" id="config-large-adjust" value="${systemSettings.large_adjustment_threshold}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-700 font-semibold">
+                                <p class="text-[8px] text-slate-400 mt-1">Obliga a justificar con comentario si cambian este valor.</p>
+                            </div>
+                        </div>
+
+                        <button onclick="handleSaveAppSettings()" class="w-full bg-[#0d3a22] hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl shadow-md transition text-center block mt-3">
+                            Guardar Cambios de Configuración 💾
+                        </button>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        // --- 🍎 IPHONE ADMINISTRATOR SCREEN ---
+        async function renderAdminScreen() {
+            const container = document.getElementById('screen-admin');
+            if (!container) return;
+
+            const session = activeSessions.admin;
+            const tab = activeTabs.admin;
+            const db = getMockDb();
+
+            const mySector = db.sectors.find(s => s.id === session.sector_id);
+            const mySectorName = mySector ? mySector.name : 'Mi Sector';
+
+            const myItems = db.merchandise.filter(m => m.sector_id === session.sector_id && m.active);
+            const myCodes = db.access_codes.filter(c => c.sector_id === session.sector_id);
+
+            let html = `
+                <!-- Header -->
+                <div class="bg-[#0d3a22] text-white p-3 pt-1.5 flex justify-between items-center shadow-sm select-none border-b border-[#0dcaf0]/20 shrink-0">
+                    <div>
+                        <div class="text-[8px] text-cyan-400 font-bold uppercase tracking-wider">Móvil Admin Sector</div>
+                        <h4 class="font-extrabold text-[11px] truncate max-w-[130px] leading-tight">${mySectorName}</h4>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] font-bold text-emerald-200 block">${session.name}</span>
+                        <span class="text-[8px] font-mono text-slate-300">Clave: ADM11</span>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="bg-slate-100 border-b border-slate-200 flex text-center font-bold text-[10px] select-none shrink-0">
+                    <button onclick="setTab('admin', 'inventory')" class="flex-grow py-2.5 ${tab === 'inventory' ? 'bg-white border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500'}">
+                        📦 Stock (${myItems.length})
+                    </button>
+                    <button onclick="setTab('admin', 'codes')" class="flex-grow py-2.5 ${tab === 'codes' ? 'bg-white border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500'}">
+                        🔑 Claves (${myCodes.length})
+                    </button>
+                </div>
+
+                <div class="p-3 flex-grow space-y-3 overflow-y-auto">
+            `;
+
+            if (tab === 'inventory') {
+                html += `
+                    <!-- Sector reports share / Copy block -->
+                    <div class="bg-white border border-slate-200 p-2.5 rounded-2xl shadow-sm flex items-center justify-around gap-1.5 select-none">
+                        <button onclick="handleCopyStockText('${session.sector_id}')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[9px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition">
+                            📋 Copiar Stock
+                        </button>
+                        <button onclick="handleShareStockWhatsApp('${session.sector_id}', '${session.name}')" class="flex-grow flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-200 font-bold text-[9px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition">
+                            💬 Enviar WhatsApp
+                        </button>
+                    </div>
+
+                    <button onclick="openAddMerchModal('admin')" class="w-full bg-[#198754] hover:bg-emerald-600 text-white font-bold text-xs py-2 rounded-xl flex items-center justify-center gap-1 transition shadow-sm select-none">
+                        ➕ Alta de Mercadería
+                    </button>
+
+                    <div class="space-y-2">
+                `;
+
+                if (myItems.length === 0) {
+                    html += `<div class="p-6 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">No hay artículos activos en este sector.</div>`;
+                } else {
+                    myItems.forEach(item => {
+                        const isLow = item.quantity <= systemSettings.low_stock_threshold;
+                        html += `
+                            <div class="bg-white border border-slate-200 rounded-xl p-2.5 shadow-sm flex justify-between items-center gap-2 animate-pop-up">
+                                <div class="truncate max-w-[120px]">
+                                    <h5 class="font-extrabold text-xs text-slate-800 truncate">${item.name}</h5>
+                                    <div class="text-[10px] text-slate-500 font-semibold">Stock: <span class="${isLow ? 'text-red-600 font-bold' : 'text-emerald-800'}">${item.quantity} ${item.unit}</span></div>
+                                    <div class="text-[8px] text-slate-400 truncate">Operó: ${item.updated_by || 'Auto'}</div>
+                                </div>
+                                <div class="flex items-center gap-1.5 shrink-0 select-none">
+                                    <div class="flex items-center bg-slate-100 rounded border border-slate-200 overflow-hidden font-bold">
+                                        <button onclick="promptReasonAndAdjust('${item.id}', -1, 'admin')" class="bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 border-r border-slate-200">-</button>
+                                        <span class="px-2 py-0.5 text-xs text-slate-800 min-w-[15px] text-center">${item.quantity}</span>
+                                        <button onclick="adjustStock('${item.id}', 1, 'admin')" class="bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 border-l border-slate-200">+</button>
+                                    </div>
+                                    <button onclick="openTransferModal('${item.id}', 'admin')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-1.5 rounded-lg font-bold text-[9px]" title="Traspasar">🔄</button>
+                                    <button onclick="deleteItem('${item.id}', 'admin')" class="bg-red-50 hover:bg-red-100 text-red-600 p-1.5 rounded-lg transition">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                html += `</div>`;
+
+            } else if (tab === 'codes') {
+                html += `
+                    <div class="bg-emerald-50 border border-emerald-100 p-2.5 rounded-2xl flex justify-between items-center select-none">
+                        <span class="text-[9px] font-bold text-emerald-950 uppercase">Códigos de mi Área</span>
+                        <button onclick="openAddCodeModal('admin')" class="bg-[#198754] hover:bg-emerald-600 text-white font-bold text-[9px] px-2 py-1 rounded-lg transition shadow-sm">
+                            ➕ Crear Código
+                        </button>
+                    </div>
+
+                    <div class="space-y-2">
+                `;
+
+                if (myCodes.length === 0) {
+                    html += `<div class="p-4 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">No hay códigos creados.</div>`;
+                } else {
+                    myCodes.forEach(code => {
+                        let roleColor = code.role === 'admin' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-cyan-100 text-cyan-800 border border-cyan-200';
+                        html += `
+                            <div class="bg-white border border-slate-200 rounded-xl p-2.5 shadow-sm space-y-2 animate-pop-up">
+                                <div class="flex justify-between items-start gap-2">
+                                    <div>
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span class="font-mono font-bold text-xs text-slate-950 bg-slate-100 px-1.5 py-0.2 rounded">${code.code}</span>
+                                            <span class="text-[8px] font-bold px-1 rounded uppercase ${roleColor}">${code.role.toUpperCase()}</span>
+                                        </div>
+                                        <div class="text-[10px] text-slate-700 font-semibold mt-1">Colaborador: ${code.name}</div>
+                                    </div>
+                                    <button onclick="toggleCodeStatus('${code.id}', ${code.active}, 'admin')" class="px-2 py-0.5 rounded-full text-[8px] font-bold border transition ${code.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-red-100 text-red-800 border-red-300'}">
+                                        ${code.active ? 'Activo' : 'Anulado'}
+                                    </button>
+                                </div>
+                                <button onclick="handleShareCodeWhatsApp('${code.name}', '${code.code}', '${mySectorName}', '${code.role}')" class="w-full bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#075E54] border border-[#25D366]/30 py-1 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1 transition select-none">
+                                    💬 Enviar Clave por WhatsApp
+                                </button>
+                            </div>
+                        `;
+                    });
+                }
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        // --- 🤖 ANDROID STAFF SCREEN ---
+        async function renderStaffScreen() {
+            const container = document.getElementById('screen-staff');
+            if (!container) return;
+
+            const session = activeSessions.staff;
+            const db = getMockDb();
+
+            const mySector = db.sectors.find(s => s.id === session.sector_id);
+            const mySectorName = mySector ? mySector.name : 'Mi Sector';
+
+            const myItems = db.merchandise.filter(m => m.sector_id === session.sector_id && m.active);
+
+            let html = `
+                <!-- Header -->
+                <div class="bg-[#0d3a22] text-white p-3 pt-2 flex justify-between items-center shadow-md select-none border-b border-[#0dcaf0]/20 shrink-0">
+                    <div>
+                        <div class="text-[8px] text-emerald-300 font-bold uppercase">Móvil Personal Campo</div>
+                        <h4 class="font-extrabold text-[11px] truncate max-w-[130px] leading-none">${mySectorName}</h4>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] font-bold text-emerald-200 block">${session.name}</span>
+                        <span class="text-[8px] font-mono text-slate-300">Clave: STF11</span>
+                    </div>
+                </div>
+
+                <div class="p-3 flex-grow space-y-3 overflow-y-auto">
+                    
+                    <button onclick="openAddMerchModal('staff')" class="w-full bg-[#0d3a22] hover:bg-emerald-950 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1 transition shadow-md select-none">
+                        ➕ Registrar Nueva Mercadería
+                    </button>
+
+                    <div class="space-y-2">
+                        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200 pb-1 select-none">Lista de Productos del Área</div>
+            `;
+
+            if (myItems.length === 0) {
+                html += `<div class="p-6 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">No hay stock registrado en tu sector.</div>`;
+            } else {
+                myItems.forEach(item => {
+                    const isLow = item.quantity <= systemSettings.low_stock_threshold;
+                    html += `
+                        <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-1.5 animate-pop-up">
+                            <div class="truncate max-w-[110px]">
+                                <h5 class="font-extrabold text-xs text-slate-800 truncate">${item.name}</h5>
+                                <div class="text-[11px] font-bold ${isLow ? 'text-amber-700 animate-pulse' : 'text-emerald-800'} mt-0.5">${item.quantity} ${item.unit}</div>
+                            </div>
+                            
+                            <!-- Touch-Friendly adjust buttons -->
+                            <div class="flex items-center gap-1 select-none">
+                                <button onclick="promptReasonAndAdjust('${item.id}', -1, 'staff')" class="bg-red-50 hover:bg-red-100 text-red-700 w-8.5 h-8.5 rounded-xl font-bold text-xs flex items-center justify-center shadow-sm border border-red-100 transition active:scale-90">-1</button>
+                                <button onclick="adjustStock('${item.id}', 1, 'staff')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 w-8.5 h-8.5 rounded-xl font-bold text-xs flex items-center justify-center shadow-sm border border-emerald-100 transition active:scale-90">+1</button>
+                                <button onclick="adjustStock('${item.id}', 5, 'staff')" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-850 w-8.5 h-8.5 rounded-xl font-extrabold text-[10px] flex items-center justify-center shadow-sm border border-emerald-200 transition active:scale-90">+5</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        // --- 📱 FULL SCREEN SINGLE VIEW (PWA DESIGN) ---
+        async function renderFullscreenScreen() {
+            const container = document.getElementById('screen-fullscreen-app');
+            if (!container) return;
+
+            const session = activeSessions.fullscreen;
+            const db = getMockDb();
+
+            // 1. LOGIN REQUIRED STATE
+            if (!session) {
+                container.innerHTML = `
+                    <div class="p-6 flex-grow flex flex-col justify-center items-center space-y-6">
+                        <div class="text-center space-y-2 select-none">
+                            <span class="text-5xl">🌿</span>
+                            <h3 class="text-xl font-extrabold text-emerald-950">Ingreso Obligatorio</h3>
+                            <p class="text-xs text-slate-500 max-w-xs mx-auto">Ingresa tus datos reales y código asignado para operar en Agua Verde.</p>
+                        </div>
+                        
+                        <div class="w-full max-w-sm bg-white border border-emerald-800/10 p-5 rounded-2xl shadow-xl space-y-3">
+                            <div>
+                                <label class="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">Nombre</label>
+                                <input type="text" id="fs-login-first" placeholder="Ej: Juan" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#198754] outline-none font-bold">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">Apellido</label>
+                                <input type="text" id="fs-login-last" placeholder="Ej: Pérez" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#198754] outline-none font-bold">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">Código de Seguridad (4-6 chars)</label>
+                                <input type="text" id="fs-login-code" maxlength="6" placeholder="Ej: DUE12" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-center font-mono font-bold tracking-widest text-sm focus:ring-2 focus:ring-[#198754] outline-none uppercase">
+                            </div>
+                            
+                            <button onclick="handleFullscreenLogin()" class="w-full bg-[#0d3a22] hover:bg-emerald-800 text-white font-bold text-xs py-3 rounded-xl shadow-md transition">
+                                Validar e Ingresar al Sistema 🔓
+                            </button>
+                        </div>
+
+                        <!-- Cheat Sheet -->
+                        <div class="bg-amber-50 border border-amber-100 rounded-2xl p-3 text-[10px] text-amber-900 w-full max-w-sm text-center space-y-1.5 select-none">
+                            <p class="font-bold">🔑 Clic para autocompletar prueba rápida:</p>
+                            <div class="flex flex-wrap justify-center gap-1 font-mono font-bold text-[9px]">
+                                <span onclick="quickFillLogin('Roberto', 'Dueño', 'DUE12')" class="bg-amber-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-amber-300 border border-amber-300">DUE12 (Dueño)</span>
+                                <span onclick="quickFillLogin('Clara', 'Gómez', 'ADM11')" class="bg-amber-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-amber-300 border border-amber-300">ADM11 (Admin)</span>
+                                <span onclick="quickFillLogin('Mateo', 'Ruiz', 'STF11')" class="bg-amber-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-amber-300 border border-amber-300">STF11 (Personal)</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // 2. DASHBOARD ACTIVE STATE
+            const mySector = db.sectors.find(s => s.id === session.sector_id);
+            const mySectorName = mySector ? mySector.name : 'Consolidado';
+
+            let activeItems = [];
+            if (session.role === 'owner' || session.can_view_all) {
+                activeItems = db.merchandise.filter(m => m.active);
+            } else {
+                activeItems = db.merchandise.filter(m => m.sector_id === session.sector_id && m.active);
+            }
+
+            html = `
+                <!-- Logged Header -->
+                <div class="bg-emerald-950 text-white p-3.5 px-4 flex justify-between items-center border-b border-emerald-900 shrink-0 select-none">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">👤</span>
+                        <div>
+                            <h4 class="font-bold text-xs leading-none">${session.name}</h4>
+                            <p class="text-[9px] text-emerald-300 font-bold uppercase tracking-wider mt-1">${session.role.toUpperCase()} • ${mySectorName}</p>
+                        </div>
+                    </div>
+                    <button onclick="handleFullscreenLogout()" class="text-[9px] font-bold bg-[#198754] hover:bg-red-800 border border-emerald-800 hover:border-red-700 px-2.5 py-1.5 rounded-lg transition text-white">
+                        Salir 🚪
+                    </button>
+                </div>
+
+                <div class="p-4 flex-grow space-y-4 overflow-y-auto">
+            `;
+
+            // FULLSCREEN STAFF INTERFACE
+            if (session.role === 'staff') {
+                html += `
+                    <button onclick="openAddMerchModal('fullscreen')" class="w-full bg-[#198754] hover:bg-emerald-600 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1 transition shadow-sm">
+                        ➕ Registrar Nueva Mercadería
+                    </button>
+
+                    <div class="space-y-2">
+                        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200 pb-1">Stock Actual del Área</div>
+                `;
+
+                if (activeItems.length === 0) {
+                    html += `<div class="p-6 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">No hay productos en tu área.</div>`;
+                } else {
+                    activeItems.forEach(item => {
+                        html += `
+                            <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-1.5 animate-pop-up">
+                                <div>
+                                    <h5 class="font-extrabold text-xs text-slate-800">${item.name}</h5>
+                                    <div class="text-xs font-bold text-emerald-800 mt-0.5">${item.quantity} ${item.unit}</div>
+                                </div>
+                                <div class="flex items-center gap-1 select-none">
+                                    <button onclick="promptReasonAndAdjust('${item.id}', -1, 'fullscreen')" class="bg-red-50 hover:bg-red-100 text-red-700 w-8.5 h-8.5 rounded-xl font-bold text-xs flex items-center justify-center border border-red-100 active:scale-90">-1</button>
+                                    <button onclick="adjustStock('${item.id}', 1, 'fullscreen')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 w-8.5 h-8.5 rounded-xl font-bold text-xs flex items-center justify-center border border-emerald-100 active:scale-90">+1</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                html += `</div>`;
+            }
+
+            // FULLSCREEN ADMIN INTERFACE
+            if (session.role === 'admin') {
+                html += `
+                    <div class="grid grid-cols-2 gap-2 text-center select-none font-bold">
+                        <button onclick="openAddMerchModal('fullscreen')" class="bg-[#198754] hover:bg-emerald-600 text-white text-[10px] py-2 rounded-xl transition shadow">
+                            ➕ Registrar Stock
+                        </button>
+                        <button onclick="openAddCodeModal('fullscreen')" class="bg-slate-800 hover:bg-slate-700 text-white text-[10px] py-2 rounded-xl transition shadow">
+                            🔑 Clave Colaborador
+                        </button>
+                    </div>
+
+                    <div class="bg-white border border-slate-200 p-2.5 rounded-xl flex items-center justify-around gap-1.5 text-center select-none font-bold">
+                        <button onclick="handleCopyStockText('${session.sector_id}')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] py-1.5 rounded-lg transition">
+                            📋 Copiar Stock
+                        </button>
+                        <button onclick="handleShareStockWhatsApp('${session.sector_id}', '${session.name}')" class="flex-grow flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[9px] py-1.5 rounded-lg transition border border-emerald-200">
+                            💬 WhatsApp Stock
+                        </button>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200 pb-1">Inventario Activo</div>
+                `;
+
+                if (activeItems.length === 0) {
+                    html += `<div class="p-6 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">No hay artículos registrados.</div>`;
+                } else {
+                    activeItems.forEach(item => {
+                        html += `
+                            <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-1.5 animate-pop-up">
+                                <div>
+                                    <h5 class="font-extrabold text-xs text-slate-800">${item.name}</h5>
+                                    <div class="text-xs font-bold text-emerald-800 mt-0.5">${item.quantity} ${item.unit}</div>
+                                </div>
+                                <div class="flex items-center gap-1.5 select-none">
+                                    <div class="flex items-center bg-slate-100 rounded border border-slate-200 overflow-hidden font-bold">
+                                        <button onclick="promptReasonAndAdjust('${item.id}', -1, 'fullscreen')" class="bg-white px-2 py-1 text-xs text-slate-700 border-r border-slate-200">-</button>
+                                        <span class="px-2 py-0.5 text-xs text-slate-850 min-w-[15px] text-center">${item.quantity}</span>
+                                        <button onclick="adjustStock('${item.id}', 1, 'fullscreen')" class="bg-white px-2 py-1 text-xs text-slate-700 border-l border-slate-200">+</button>
+                                    </div>
+                                    <button onclick="openTransferModal('${item.id}', 'fullscreen')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-1.5 rounded-lg font-bold text-[9px]">🔄</button>
+                                    <button onclick="deleteItem('${item.id}', 'fullscreen')" class="bg-red-50 hover:bg-red-100 text-red-650 p-1.5 rounded-lg transition">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                html += `</div>`;
+            }
+
+            // FULLSCREEN OWNER INTERFACE
+            if (session.role === 'owner') {
+                html += `
+                    <div class="grid grid-cols-2 gap-2 text-center select-none font-bold">
+                        <button onclick="openAddMerchModal('fullscreen')" class="bg-[#198754] hover:bg-[#0f5132] text-white text-[10px] py-2.5 rounded-xl transition shadow">
+                            ➕ Cargar Mercadería
+                        </button>
+                        <button onclick="openAddCodeModal('fullscreen')" class="bg-slate-800 hover:bg-slate-700 text-white text-[10px] py-2.5 rounded-xl transition shadow">
+                            🔑 Registrar Clave
+                        </button>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200 pb-1">Inventario Global de Agua Verde</div>
+                `;
+
+                if (activeItems.length === 0) {
+                    html += `<div class="p-6 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">No hay artículos registrados en la chacra.</div>`;
+                } else {
+                    activeItems.forEach(item => {
+                        const secName = db.sectors.find(s => s.id === item.sector_id)?.name || 'Desconocido';
+                        html += `
+                            <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-1.5 animate-pop-up">
+                                <div>
+                                    <div class="flex items-center gap-1 flex-wrap">
+                                        <h5 class="font-extrabold text-xs text-slate-800">${item.name}</h5>
+                                        <span class="text-[8px] bg-emerald-100 text-emerald-850 px-1 py-0.2 rounded font-semibold">${secName}</span>
+                                    </div>
+                                    <div class="text-xs font-bold text-emerald-850 mt-1">${item.quantity} ${item.unit}</div>
+                                </div>
+                                <div class="flex items-center gap-1.5 select-none">
+                                    <div class="flex items-center bg-slate-100 rounded border border-slate-200 overflow-hidden font-bold">
+                                        <button onclick="promptReasonAndAdjust('${item.id}', -1, 'fullscreen')" class="bg-white px-2 py-1 text-xs text-slate-700 border-r border-slate-200">-</button>
+                                        <span class="px-2 py-0.5 text-xs text-slate-855 min-w-[15px] text-center">${item.quantity}</span>
+                                        <button onclick="adjustStock('${item.id}', 1, 'fullscreen')" class="bg-white px-2 py-1 text-xs text-slate-700 border-l border-slate-200">+</button>
+                                    </div>
+                                    <button onclick="openTransferModal('${item.id}', 'fullscreen')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-1.5 rounded-lg font-bold text-[9px]">🔄</button>
+                                    <button onclick="deleteItem('${item.id}', 'fullscreen')" class="bg-red-50 hover:bg-red-100 text-red-650 p-1.5 rounded-lg transition">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        // ==========================================
+        // DYNAMIC UTILITIES AND MODAL ACTIONS (PRO)
+        // ==========================================
+
+        function setTab(screen, tabName) {
+            activeTabs[screen] = tabName;
+            renderAllScreens();
+        }
+
+        function setOwnerSectorFilter(value) {
+            ownerSelectedSectorFilter = value;
+            renderOwnerScreen();
+        }
+
+        function switchAppMode(mode) {
+            currentAppDisplayMode = mode;
+            
+            const btnSim = document.getElementById('btn-mode-simulator');
+            const btnFull = document.getElementById('btn-mode-fullscreen');
+            
+            const sectionSim = document.getElementById('section-simulator');
+            const sectionFull = document.getElementById('section-fullscreen');
+
+            if (mode === 'simulator') {
+                btnSim.className = "px-3.5 py-2 rounded-lg text-xs font-bold transition-all bg-[#198754] text-white shadow";
+                btnFull.className = "px-3.5 py-2 rounded-lg text-xs font-bold transition-all text-emerald-200 hover:text-white";
+                sectionSim.classList.remove('hidden');
+                sectionSim.classList.add('flex');
+                sectionFull.classList.remove('flex');
+                sectionFull.classList.add('hidden');
+            } else {
+                btnSim.className = "px-3.5 py-2 rounded-lg text-xs font-bold transition-all text-emerald-200 hover:text-white";
+                btnFull.className = "px-3.5 py-2 rounded-lg text-xs font-bold transition-all bg-[#198754] text-white shadow";
+                sectionSim.classList.add('hidden');
+                sectionSim.classList.remove('flex');
+                sectionFull.classList.add('flex');
+                sectionFull.classList.remove('hidden');
+            }
+            renderAllScreens();
+        }
+
+        function toggleConfigModal(show) {
+            const modal = document.getElementById('modal-config');
+            if (show) {
+                document.getElementById('input-sb-url').value = localStorage.getItem('SUPABASE_URL') || '';
+                document.getElementById('input-sb-key').value = localStorage.getItem('SUPABASE_KEY') || '';
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function saveSupabaseConfig() {
+            const url = document.getElementById('input-sb-url').value.trim();
+            const key = document.getElementById('input-sb-key').value.trim();
+
+            if (!url || !key) {
+                showToast("Ingresa Campos", "Es requerido URL y Anon Key.", "warning");
+                return;
+            }
+
+            localStorage.setItem('SUPABASE_URL', url);
+            localStorage.setItem('SUPABASE_KEY', key);
+            
+            toggleConfigModal(false);
+            initSupabaseClient();
+        }
+
+        function clearSupabaseConfig() {
+            localStorage.removeItem('SUPABASE_URL');
+            localStorage.removeItem('SUPABASE_KEY');
+            isLiveSupabase = false;
+            supabaseClient = null;
+            
+            toggleConfigModal(false);
+            initSupabaseClient();
+            renderAllScreens();
+            showToast("Volviendo a Demo", "La simulación de Agua Verde está lista para usar de forma local.", "info");
+        }
+
+        // --- MANAGE ACTIONS ---
+        async function adjustStock(merchId, delta, screenContext, exitReason = "Ninguno", comment = "") {
+            let user = null;
+            if (screenContext === 'owner') user = activeSessions.owner;
+            else if (screenContext === 'admin') user = activeSessions.admin;
+            else if (screenContext === 'staff') user = activeSessions.staff;
+            else if (screenContext === 'fullscreen') user = activeSessions.fullscreen;
+
+            if (!user) return;
+
+            const updated = await db_updateQuantity(merchId, delta, user, exitReason, comment);
+            if (updated) {
+                showToast("Stock Modificado", "Inventario actualizado correctamente.", "success");
+                if (!isLiveSupabase) renderAllScreens();
+            }
+        }
+
+        function promptReasonAndAdjust(merchId, delta, screenContext) {
+            const db = getMockDb();
+            const original = db.merchandise.find(m => m.id === merchId);
+            if (!original) return;
+
+            const oldQty = parseFloat(original.quantity);
+            if (oldQty + delta < 0) {
+                db_updateQuantity(merchId, delta, activeSessions[screenContext] || activeSessions.fullscreen);
+                return;
+            }
+
+            const modal = document.createElement('div');
+            modal.className = "fixed inset-0 bg-black/70 z-55 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+            modal.id = "reason-modal";
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden border border-emerald-950/20">
+                    <div class="bg-[#0f5132] text-white p-4 font-bold flex justify-between items-center border-b border-[#0dcaf0]/20">
+                        <h4 class="text-xs uppercase tracking-wide">Motivo del Egreso (Opcional)</h4>
+                        <button onclick="document.getElementById('reason-modal').remove()" class="text-white hover:text-red-300 font-bold text-lg leading-none">&times;</button>
+                    </div>
+                    <div class="p-4 space-y-3.5 text-xs">
+                        <p class="text-slate-600 leading-tight">Por favor, indica de manera opcional cuál es el destino de las <strong>${Math.abs(delta)} ${original.unit}</strong> de <strong>"${original.name}"</strong>:</p>
+                        
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Destino de la mercadería</label>
+                            <select id="egress-reason-select" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 font-semibold text-slate-800 outline-none">
+                                <option value="Ninguno">-- No clasificar (Ninguno) --</option>
+                                <option value="Venta / Consumo de Cliente">💰 Venta / Consumo de Cliente</option>
+                                <option value="Consumo Propio / Personal">🍲 Consumo Propio / Personal</option>
+                                <option value="Merma / Desperdicio / Rotura">⚠️ Merma / Desperdicio / Rotura</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-2 text-xs font-bold">
+                        <button onclick="document.getElementById('reason-modal').remove()" class="bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl">Cancelar</button>
+                        <button id="btn-submit-reason" class="bg-[#0f5132] text-white hover:bg-emerald-800 px-4 py-2 rounded-xl shadow-md">Confirmar Egreso</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById('btn-submit-reason').onclick = async () => {
+                const reason = document.getElementById('egress-reason-select').value;
+                document.getElementById('reason-modal').remove();
+                await adjustStock(merchId, delta, screenContext, reason, "");
+            };
+        }
+
+        function openLargeAdjustmentPrompt(merchId, delta, userSession, exitReason, oldQty, itemName, unit) {
+            const modal = document.createElement('div');
+            modal.className = "fixed inset-0 bg-black/80 z-55 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+            modal.id = "large-adjust-modal";
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden border border-amber-300">
+                    <div class="bg-amber-950 text-amber-100 p-4 font-bold flex justify-between items-center border-b border-amber-900">
+                        <h4 class="text-xs uppercase font-extrabold tracking-wider flex items-center gap-1.5">📝 Justificación Requerida</h4>
+                    </div>
+                    <div class="p-4 space-y-3 text-xs">
+                        <p class="text-slate-700 leading-tight">
+                            Has realizado una modificación grande (<strong>${Math.abs(delta)} ${unit}</strong>) sobre <strong>"${itemName}"</strong>. Es obligatorio registrar un comentario que justifique esta acción.
+                        </p>
+                        
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Escribe tu justificación</label>
+                            <textarea id="large-adjust-comment" placeholder="Ej: Pérdida por pudrición de cajón / Usado para evento..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none focus:ring-1 focus:ring-amber-500 font-semibold" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-2 text-xs font-bold">
+                        <button id="btn-submit-large-adjust" class="bg-amber-800 hover:bg-amber-700 text-white px-4 py-2 rounded-xl shadow-md transition disabled:opacity-50" disabled>Guardar Comentario</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            const textarea = document.getElementById('large-adjust-comment');
+            const submitBtn = document.getElementById('btn-submit-large-adjust');
+
+            textarea.oninput = (e) => {
+                const val = e.target.value.trim();
+                submitBtn.disabled = val.length < 5;
+            };
+
+            submitBtn.onclick = async () => {
+                const comment = textarea.value.trim();
+                document.getElementById('large-adjust-modal').remove();
+                
+                const db = getMockDb();
+                const original = db.merchandise.find(m => m.id === merchId);
+                const sector = db.sectors.find(s => s.id === original.sector_id);
+                const sectorName = sector ? sector.name : 'Desconocido';
+                const newQty = oldQty + delta;
+
+                let details = `Cantidad modificada de ${oldQty} a ${newQty} ${unit} por ${userSession.name}.`;
+                if (exitReason !== "Ninguno") details += ` [Motivo: ${exitReason}]`;
+                details += ` [Nota: "${comment}"]`;
+
+                if (isLiveSupabase && supabaseClient) {
+                    await supabaseClient.from('merchandise').update({ quantity: newQty, updated_by: `${userSession.name} (${userSession.code})`, updated_at: new Date().toISOString() }).eq('id', merchId);
+                    await supabaseClient.from('inventory_history').insert([{
+                        merchandise_id: merchId,
+                        sector_id: original.sector_id,
+                        sector_name: sectorName,
+                        merchandise_name: original.name,
+                        action: 'update',
+                        quantity_before: oldQty,
+                        quantity_after: newQty,
+                        details: details,
+                        user_code: userSession.code,
+                        user_name: userSession.name
+                    }]);
+                    fetchAndSyncFromSupabase();
+                } else {
+                    original.quantity = newQty;
+                    original.updated_by = `${userSession.name} (${userSession.code})`;
+                    original.updated_at = new Date().toISOString();
+
+                    const log = {
+                        id: 'h-' + Math.random().toString(36).substr(2, 9),
+                        merchandise_id: merchId,
+                        sector_id: original.sector_id,
+                        sector_name: sectorName,
+                        merchandise_name: original.name,
+                        action: 'update',
+                        quantity_before: oldQty,
+                        quantity_after: newQty,
+                        details: details,
+                        user_code: userSession.code,
+                        user_name: userSession.name,
+                        created_at: new Date().toISOString()
+                    };
+                    db.inventory_history.push(log);
+                    saveMockDb(db);
+                }
+                showToast("Ajuste Grande Registrado", "Se guardó con comentario explicativo.", "success");
+            };
+        }
+
+        async function openTransferModal(merchId, screenContext) {
+            let userSession = null;
+            if (screenContext === 'owner') userSession = activeSessions.owner;
+            else if (screenContext === 'admin') userSession = activeSessions.admin;
+            else if (screenContext === 'fullscreen') userSession = activeSessions.fullscreen;
+
+            if (!userSession) return;
+
+            const db = getMockDb();
+            const original = db.merchandise.find(m => m.id === merchId);
+            if (!original) return;
+
+            const sectors = await db_getSectors();
+            const targetSectors = sectors.filter(s => s.id !== original.sector_id);
+
+            const modal = document.createElement('div');
+            modal.className = "fixed inset-0 bg-black/70 z-55 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+            modal.id = "transfer-modal";
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden border border-blue-200">
+                    <div class="bg-blue-900 text-white p-4 font-bold flex justify-between items-center border-b border-blue-950">
+                        <h4 class="text-sm font-serif">Traspaso de Mercadería</h4>
+                        <button onclick="document.getElementById('transfer-modal').remove()" class="text-white hover:text-red-300 font-bold text-lg leading-none">&times;</button>
+                    </div>
+                    <div class="p-4 space-y-3.5 text-xs">
+                        <p class="text-slate-600 leading-tight">Transfiere stock de <strong>"${original.name}"</strong> hacia otro sector de Agua Verde en tiempo real.</p>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Disponible</label>
+                                <div class="bg-slate-100 p-2 rounded-xl text-center font-bold text-slate-700">${original.quantity} ${original.unit}</div>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cantidad a Traspasar</label>
+                                <input type="number" id="transfer-qty" value="0" min="0.1" step="any" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 font-bold outline-none">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sector de Destino</label>
+                            <select id="transfer-target-sector" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 font-bold text-slate-800 outline-none">
+                                ${targetSectors.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nota del Traspaso (Opcional)</label>
+                            <input type="text" id="transfer-note" placeholder="Ej: Préstamo urgente de insumos" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none font-semibold">
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-2 text-xs font-bold">
+                        <button onclick="document.getElementById('transfer-modal').remove()" class="bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl">Cancelar</button>
+                        <button id="btn-submit-transfer" class="bg-blue-900 hover:bg-blue-850 text-white px-4 py-2 rounded-xl shadow-md">Confirmar Traspaso 🔄</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById('btn-submit-transfer').onclick = async () => {
+                const qtyVal = document.getElementById('transfer-qty').value;
+                const targetSectorId = document.getElementById('transfer-target-sector').value;
+                const note = document.getElementById('transfer-note').value;
+
+                const executed = await db_transferMerchandise(merchId, targetSectorId, qtyVal, userSession, note);
+                if (executed) {
+                    showToast("Traspaso Exitoso", "Sectores actualizados de inmediato.", "success");
+                    document.getElementById('transfer-modal').remove();
+                    if (!isLiveSupabase) renderAllScreens();
+                }
+            };
+        }
+
+        async function deleteItem(merchId, screenContext) {
+            let user = null;
+            if (screenContext === 'owner') user = activeSessions.owner;
+            else if (screenContext === 'admin') user = activeSessions.admin;
+            else if (screenContext === 'fullscreen') user = activeSessions.fullscreen;
+
+            if (!user) return;
+
+            if (confirm("¿Estás seguro de dar de baja lógicamente esta mercadería? Se mantendrá en la bitácora del Dueño.")) {
+                await db_deleteMerchandise(merchId, user);
+                showToast("Dado de Baja", "Se retiró el stock activo de la mercadería.", "warning");
+                if (!isLiveSupabase) renderAllScreens();
+            }
+        }
+
+        async function restoreItem(merchId, screenContext) {
+            if (screenContext !== 'owner') return;
+            await db_restoreMerchandise(merchId, activeSessions.owner);
+            showToast("Restaurado", "El artículo volvió al inventario activo.", "success");
+            if (!isLiveSupabase) renderAllScreens();
+        }
+
+        async function hardDeleteItem(merchId, screenContext) {
+            if (screenContext !== 'owner') return;
+            if (confirm("⚠️ ¡ADVERTENCIA! Se eliminará este registro permanentemente. ¿Deseas continuar?")) {
+                await db_hardDeleteMerchandise(merchId);
+                showToast("Eliminado Permanente", "Se removió físicamente de la base de datos.", "error");
+                if (!isLiveSupabase) renderAllScreens();
+            }
+        }
+
+        async function toggleCodeStatus(codeId, currentStatus, screenContext) {
+            await db_toggleCodeActive(codeId, currentStatus);
+            showToast("Clave Actualizada", "El estado del código ha sido modificado.", "info");
+            if (!isLiveSupabase) renderAllScreens();
+        }
+
+        async function handleAddNewSector() {
+            const input = document.getElementById('input-new-sector-name');
+            const name = input.value.trim();
+            if (!name) {
+                showToast("Nombre Vacío", "Por favor ingresa un nombre para el sector.", "warning");
+                return;
+            }
+
+            const result = await db_addSector(name);
+            if (result) {
+                showToast("Sector Creado", `El sector ${name} fue registrado con éxito.`, "success");
+                input.value = '';
+                if (!isLiveSupabase) renderAllScreens();
+            }
+        }
+
+        async function handleDeleteSector(id) {
+            if (confirm("⚠️ ¡ALERTA CRÍTICA! Eliminar este sector eliminará todas las mercaderías, códigos y registros de auditoría asociados a esta área. ¿Proceder?")) {
+                await db_deleteSector(id);
+                showToast("Sector Eliminado", "Se borró el área y todos sus componentes.", "error");
+                if (!isLiveSupabase) renderAllScreens();
+            }
+        }
+
+        async function clearHistoryLogs() {
+            if (confirm("¿Estás seguro de vaciar por completo el historial de auditoría? Esta acción es irreversible.")) {
+                await db_clearHistoryLogs();
+                showToast("Historial Purgado", "Se vació la bitácora completa.", "error");
+                if (!isLiveSupabase) renderAllScreens();
+            }
+        }
+
+        async function handleSaveAppSettings() {
+            const name = document.getElementById('config-app-name').value.trim();
+            const low = parseFloat(document.getElementById('config-low-stock').value);
+            const large = parseFloat(document.getElementById('config-large-adjust').value);
+
+            if (!name || isNaN(low) || isNaN(large)) {
+                showToast("Datos Erróneos", "Verifica todos los campos de configuración.", "warning");
+                return;
+            }
+
+            const configObj = {
+                app_name: name,
+                low_stock_threshold: low,
+                large_adjustment_threshold: large
+            };
+
+            await db_saveSettings(configObj);
+            showToast("Configuración Guardada", "Todos los dispositivos se han actualizado.", "success");
+        }
+
+        // --- PURE CLIENT-SIDE EXCEL EXPORT ---
+        function exportToExcel() {
+            const db = getMockDb();
+
+            const stockData = [];
+            db.merchandise.forEach(m => {
+                const sector = db.sectors.find(s => s.id === m.sector_id);
+                const sectorName = sector ? sector.name : 'Desconocido';
+                stockData.push({
+                    "Sector": sectorName,
+                    "Artículo": m.name,
+                    "Cantidad": m.quantity,
+                    "Unidad": m.unit === 'kg' ? 'kilos' : 'unidades',
+                    "Estado": m.active ? "Activo" : "Dado de baja",
+                    "Última Modificación": m.updated_by || "Por Defecto",
+                    "Fecha Actualización": new Date(m.updated_at).toLocaleString()
+                });
+            });
+
+            const historyData = [];
+            db.inventory_history.forEach(h => {
+                historyData.push({
+                    "Fecha y Hora": new Date(h.created_at).toLocaleString(),
+                    "Sector": h.sector_name,
+                    "Artículo": h.merchandise_name,
+                    "Acción": h.action.toUpperCase(),
+                    "Cantidad Antes": h.quantity_before !== null ? h.quantity_before : '--',
+                    "Cantidad Después": h.quantity_after !== null ? h.quantity_after : '--',
+                    "Detalle Completo": h.details,
+                    "Código Operador": h.user_code,
+                    "Nombre Operador": h.user_name
+                });
+            });
+
+            const wb = XLSX.utils.book_new();
+
+            const wsStock = XLSX.utils.json_to_sheet(stockData);
+            const wsHistory = XLSX.utils.json_to_sheet(historyData);
+
+            XLSX.utils.book_append_sheet(wb, wsStock, "Stock Consolidado");
+            XLSX.utils.book_append_sheet(wb, wsHistory, "Historial de Auditoría");
+
+            const fileName = `Reporte_Inventario_${systemSettings.app_name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            showToast("📥 Excel Descargado", "Planilla de control descargada con éxito.", "success");
+        }
+
+        // --- WHATSAPP UTILITIES ---
+        async function handleCopyStockText(sectorId) {
+            const db = getMockDb();
+            const sector = db.sectors.find(s => s.id === sectorId);
+            const sectorName = sector ? sector.name : 'Mi Sector';
+            const items = db.merchandise.filter(m => m.sector_id === sectorId && m.active);
+
+            let txt = `📋 *Stock ${systemSettings.app_name} - ${sectorName}*\nFecha: ${new Date().toLocaleDateString()}\n\n`;
+            if (items.length === 0) {
+                txt += "No hay artículos cargados.";
+            } else {
+                items.forEach(i => {
+                    txt += `• *${i.name}*: ${i.quantity} ${i.unit}\n`;
+                });
+            }
+
+            navigator.clipboard.writeText(txt);
+            showToast("📋 Copiado al Portapapeles", "Reporte de stock guardado para compartir.", "success");
+        }
+
+        async function handleShareStockWhatsApp(sectorId, operatorName) {
+            const db = getMockDb();
+            const sector = db.sectors.find(s => s.id === sectorId);
+            const sectorName = sector ? sector.name : 'Mi Sector';
+            const items = db.merchandise.filter(m => m.sector_id === sectorId && m.active);
+
+            let txt = `🌿 *Inventario de Stock - ${systemSettings.app_name}*\nDescription: *${sectorName}*\n📅 Fecha: ${new Date().toLocaleDateString()}\n👤 Operador: ${operatorName}\n\n`;
+            if (items.length === 0) {
+                txt += "No hay artículos cargados en el inventario actual.";
+            } else {
+                items.forEach(i => {
+                    txt += `• *${i.name}*: ${i.quantity} ${i.unit}\n`;
+                });
+            }
+
+            const url = `https://wa.me/?text=${encodeURIComponent(txt)}`;
+            window.open(url, '_blank');
+        }
+
+        function handleShareCodeWhatsApp(collabName, code, sectorName, role) {
+            const txt = `🌿 *${systemSettings.app_name} - Credenciales de Acceso*\n\nHola *${collabName}*, se ha generado tu clave de seguridad para operar en el sistema de inventario:\n\n🛖 Sector: *${sectorName}*\n🔑 Código de Acceso: *${code}*\n👤 Rango: *${role.toUpperCase()}*\n\nIngresa al inventario ingresando tus datos reales y tu código de acceso asignado en el sistema.`;
+            const url = `https://wa.me/?text=${encodeURIComponent(txt)}`;
+            window.open(url, '_blank');
+        }
+
+
+        // ==========================================
+        // DYNAMIC ADD MODAL CREATORS
+        // ==========================================
+
+        async function openAddMerchModal(screenContext) {
+            let user = null;
+            if (screenContext === 'owner') user = activeSessions.owner;
+            else if (screenContext === 'admin') user = activeSessions.admin;
+            else if (screenContext === 'staff') user = activeSessions.staff;
+            else if (screenContext === 'fullscreen') user = activeSessions.fullscreen;
+
+            if (!user) return;
+
+            const sectors = await db_getSectors();
+
+            let sectorSection = '';
+            if (user.role === 'owner' || user.can_view_all) {
+                sectorSection = `
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Sector Responsable</label>
+                        <select id="new-merch-sector" onchange="loadSectorItemDropdown(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs focus:ring-1 focus:ring-emerald-700 outline-none font-semibold">
+                            ${sectors.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+            } else {
+                const userSecName = sectors.find(s => s.id === user.sector_id)?.name || 'Tu Sector';
+                sectorSection = `
+                    <input type="hidden" id="new-merch-sector" value="${user.sector_id}">
+                    <div class="text-[11px] bg-slate-100 p-2.5 rounded-xl text-slate-700 font-bold">
+                        Área de Registro: ${userSecName}
+                    </div>
+                `;
+            }
+
+            const modal = document.createElement('div');
+            modal.className = "fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+            modal.id = "dynamic-modal";
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-200">
+                    <div class="bg-[#0f5132] text-white p-4 font-bold flex justify-between items-center border-b border-[#0dcaf0]/20">
+                        <h4 class="text-sm font-serif">Registrar Stock</h4>
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="text-white hover:text-red-300 font-bold text-lg leading-none">&times;</button>
+                    </div>
+                    <div class="p-4 space-y-3.5 text-xs">
+                        ${sectorSection}
+                        
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre del Producto</label>
+                            
+                            <select id="select-existing-items" onchange="handleExistingItemSelectChange(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none font-bold text-slate-700 mb-2">
+                            </select>
+
+                            <input type="text" id="new-merch-name" placeholder="Escribe el nombre del artículo nuevo..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 focus:ring-1 focus:ring-emerald-700 outline-none font-bold hidden">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Stock Inicial / Cantidad</label>
+                                <input type="number" id="new-merch-quantity" value="0" min="0" step="any" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 focus:ring-1 focus:ring-emerald-700 outline-none font-semibold">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Tipo de Medida</label>
+                                <select id="new-merch-unit" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 focus:ring-1 focus:ring-emerald-700 outline-none font-bold">
+                                    <option value="kg">⚖️ Kilos (kg)</option>
+                                    <option value="u">📦 Unidades (u)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-2 text-xs font-bold">
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl">Cancelar</button>
+                        <button id="btn-submit-new-merch" class="bg-[#0f5132] text-white hover:bg-emerald-800 px-3.5 py-2 rounded-xl shadow">Confirmar Alta</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            const activeSectorId = user.role === 'owner' || user.can_view_all ? sectors[0]?.id : user.sector_id;
+            loadSectorItemDropdown(activeSectorId);
+
+            document.getElementById('btn-submit-new-merch').onclick = async () => {
+                const selectElement = document.getElementById('select-existing-items');
+                let name = selectElement.value;
+                
+                if (name === "__CREATE_NEW__") {
+                    name = document.getElementById('new-merch-name').value;
+                }
+
+                const qtyVal = document.getElementById('new-merch-quantity').value;
+                const unit = document.getElementById('new-merch-unit').value;
+                const sectorId = document.getElementById('new-merch-sector').value;
+
+                const db = getMockDb();
+                const existingItem = db.merchandise.find(m => m.sector_id === sectorId && m.name.toLowerCase() === name.trim().toLowerCase() && m.active);
+                
+                if (existingItem) {
+                    const addQty = parseFloat(qtyVal);
+                    await db_updateQuantity(existingItem.id, addQty, user, "Ninguno", "Ingreso de mercadería por alta recurrente");
+                    showToast("Carga Exitosa", `Se agregaron ${addQty} ${unit} a "${existingItem.name}".`, "success");
+                    document.getElementById('dynamic-modal').remove();
+                    if (!isLiveSupabase) renderAllScreens();
+                } else {
+                    const inserted = await db_addMerchandise(name, qtyVal, unit, sectorId, user);
+                    if (inserted) {
+                        showToast("Carga Exitosa", `Se registró "${name}" con éxito.`, "success");
+                        document.getElementById('dynamic-modal').remove();
+                        if (!isLiveSupabase) renderAllScreens();
+                    }
+                }
+            };
+        }
+
+        function loadSectorItemDropdown(sectorId) {
+            const select = document.getElementById('select-existing-items');
+            if (!select) return;
+
+            const db = getMockDb();
+            const items = db.merchandise.filter(m => m.sector_id === sectorId && m.active);
+            
+            let optionsHtml = '';
+            if (items.length === 0) {
+                optionsHtml = `<option value="__CREATE_NEW__">➕ [Registrar artículo nuevo...]</option>`;
+                document.getElementById('new-merch-name').classList.remove('hidden');
+            } else {
+                optionsHtml = `<option value="">-- Seleccionar artículo existente --</option>`;
+                items.forEach(i => {
+                    optionsHtml += `<option value="${i.name}">📦 ${i.name} (${i.unit})</option>`;
+                });
+                optionsHtml += `<option value="__CREATE_NEW__">➕ [Registrar otro artículo nuevo...]</option>`;
+                document.getElementById('new-merch-name').classList.add('hidden');
+            }
+
+            select.innerHTML = optionsHtml;
+        }
+
+        function handleExistingItemSelectChange(value) {
+            const nameInput = document.getElementById('new-merch-name');
+            const unitSelect = document.getElementById('new-merch-unit');
+
+            if (value === "__CREATE_NEW__") {
+                nameInput.classList.remove('hidden');
+                nameInput.value = '';
+                unitSelect.disabled = false;
+            } else if (value === "") {
+                nameInput.classList.add('hidden');
+                unitSelect.disabled = false;
+            } else {
+                nameInput.classList.add('hidden');
+                const db = getMockDb();
+                const matched = db.merchandise.find(m => m.name.toLowerCase() === value.toLowerCase() && m.active);
+                if (matched) {
+                    unitSelect.value = matched.unit;
+                    unitSelect.disabled = true;
+                }
+            }
+        }
+
+        async function openAddCodeModal(screenContext) {
+            let user = null;
+            if (screenContext === 'owner') user = activeSessions.owner;
+            else if (screenContext === 'admin') user = activeSessions.admin;
+            else if (screenContext === 'fullscreen') user = activeSessions.fullscreen;
+
+            if (!user) return;
+
+            const sectors = await db_getSectors();
+
+            let sectorSection = '';
+            let roleSection = '';
+
+            if (user.role === 'owner') {
+                sectorSection = `
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Asignar a Sector</label>
+                        <select id="new-code-sector" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs focus:ring-1 focus:ring-emerald-700 outline-none font-semibold">
+                            <option value="">Consolidado Dueño (Sin Sector)</option>
+                            ${sectors.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+                roleSection = `
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Rango del Código</label>
+                        <select id="new-code-role" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs focus:ring-1 focus:ring-emerald-700 outline-none font-bold">
+                            <option value="staff">Personal de Campo / Mucamas</option>
+                            <option value="admin">Administrador de Sector (Admin)</option>
+                            <option value="owner">Propietario / Dueño (Owner)</option>
+                        </select>
+                    </div>
+                `;
+            } else {
+                const userSecName = sectors.find(s => s.id === user.sector_id)?.name || 'Tu Sector';
+                sectorSection = `
+                    <input type="hidden" id="new-code-sector" value="${user.sector_id}">
+                    <div class="text-[11px] bg-slate-100 p-2.5 rounded-xl text-slate-700 font-bold">
+                        Área de Acceso: ${userSecName}
+                    </div>
+                `;
+                roleSection = `
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Rango del Código</label>
+                        <select id="new-code-role" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs focus:ring-1 focus:ring-emerald-700 outline-none font-bold">
+                            <option value="staff">Personal de Campo / Cocina</option>
+                            <option value="admin">Administrador de Área (Admin)</option>
+                        </select>
+                    </div>
+                `;
+            }
+
+            const modal = document.createElement('div');
+            modal.className = "fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+            modal.id = "dynamic-modal";
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-200">
+                    <div class="bg-slate-900 text-white p-4 font-bold flex justify-between items-center border-b border-emerald-950">
+                        <h4 class="text-sm font-serif">Crear Clave de Entrada</h4>
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="text-white hover:text-red-300 font-bold text-lg leading-none">&times;</button>
+                    </div>
+                    <div class="p-4 space-y-3.5 text-xs">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre Completo del Colaborador</label>
+                            <input type="text" id="new-code-name" placeholder="Ej: Juan Pérez" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 focus:ring-1 focus:ring-emerald-700 outline-none font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Clave de Seguridad (4 a 6 Letras/Números)</label>
+                            <input type="text" id="new-code-text" maxlength="6" placeholder="Ej: STF22" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 focus:ring-1 focus:ring-emerald-700 outline-none font-mono uppercase tracking-widest text-center text-sm font-bold">
+                            <p class="text-[9px] text-slate-400 mt-1">Obligatorio: Entre 4 y 6 caracteres.</p>
+                        </div>
+                        ${roleSection}
+                        ${sectorSection}
+                    </div>
+                    <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-2 text-xs font-bold">
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl">Cancelar</button>
+                        <button id="btn-submit-new-code" class="bg-slate-950 text-white hover:bg-slate-800 px-3.5 py-2 rounded-xl shadow">Crear Clave 🔐</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById('btn-submit-new-code').onclick = async () => {
+                const name = document.getElementById('new-code-name').value;
+                const codeText = document.getElementById('new-code-text').value;
+                const role = document.getElementById('new-code-role').value;
+                const sectorVal = document.getElementById('new-code-sector').value;
+                const sectorId = sectorVal === "" ? null : sectorVal;
+
+                if (!name || !codeText) {
+                    alert("Por favor completa todos los campos del código.");
+                    return;
+                }
+
+                const inserted = await db_createCode(codeText, name, role, sectorId);
+                if (inserted) {
+                    showToast("Clave Generada", `Acceso asignado para ${name}.`, "success");
+                    document.getElementById('dynamic-modal').remove();
+                    if (!isLiveSupabase) renderAllScreens();
+                }
+            };
+        }
+
+        // --- SHOW EMBEDDED MODAL ALERTS ---
+        function showModalAlert(title, message) {
+            const modal = document.createElement('div');
+            modal.className = "fixed inset-0 bg-black/75 z-55 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+            modal.id = "alert-modal";
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden border border-red-200">
+                    <div class="bg-red-950 text-red-100 p-4 font-bold flex justify-between items-center border-b border-red-900">
+                        <h4 class="text-xs uppercase font-extrabold tracking-wider flex items-center gap-1.5">🚨 ${title}</h4>
+                        <button onclick="document.getElementById('alert-modal').remove()" class="text-red-300 hover:text-white font-bold text-lg leading-none">&times;</button>
+                    </div>
+                    <div class="p-5 text-slate-700 text-xs leading-relaxed space-y-2">
+                        <p>${message}</p>
+                    </div>
+                    <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end text-xs font-bold">
+                        <button onclick="document.getElementById('alert-modal').remove()" class="bg-red-900 text-white hover:bg-red-800 px-4 py-2 rounded-xl shadow-md">
+                            Entendido 🆗
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        // --- TOAST SYSTEMS ---
+        function showToast(title, message, type = "info") {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            let colors = "bg-white border-l-4 border-emerald-800 text-slate-800";
+            if (type === "success") colors = "bg-emerald-950 text-white border-l-4 border-emerald-400";
+            else if (type === "error") colors = "bg-red-950 text-red-100 border-l-4 border-red-500";
+            else if (type === "warning") colors = "bg-amber-100 text-amber-950 border-l-4 border-amber-500";
+
+            toast.className = `p-3 rounded-xl shadow-xl max-w-xs w-80 text-xs flex justify-between items-start gap-2.5 transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto ${colors}`;
+            toast.innerHTML = `
+                <div>
+                    <strong class="font-extrabold block mb-0.5">${title}</strong>
+                    <span>${message}</span>
+                </div>
+                <button class="font-bold opacity-60 hover:opacity-100 leading-none">&times;</button>
+            `;
+
+            container.appendChild(toast);
+            
+            toast.querySelector('button').onclick = () => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            };
+
+            setTimeout(() => toast.classList.remove('opacity-0', 'translate-y-2'), 40);
+            setTimeout(() => { if (toast.parentNode) { toast.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => toast.remove(), 300); } }, 4000);
+        }
+
+    </script>
+
+
+</body></html>
