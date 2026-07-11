@@ -1160,6 +1160,39 @@
             }
         }
 
+        async function db_deleteAccessCode(codeId, userSession) {
+            const db = getMockDb();
+            const target = db.access_codes.find(c => c.id === codeId);
+            if (!target || !userSession) return false;
+
+            if (target.code.toUpperCase() === userSession.code.toUpperCase()) {
+                showToast('Acción bloqueada', 'No podés eliminar el código de tu sesión actual.', 'warning');
+                return false;
+            }
+
+            const isOwner = userSession.role === 'owner';
+            const adminAllowed = userSession.role === 'admin' &&
+                target.sector_id === userSession.sector_id && target.role !== 'owner';
+            if (!isOwner && !adminAllowed) {
+                showToast('Acceso denegado', 'Solo podés eliminar códigos autorizados de tu sector.', 'error');
+                return false;
+            }
+
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient.from('access_codes').delete().eq('id', codeId);
+                if (error) {
+                    console.error('Error al eliminar código:', error);
+                    showToast('Error', 'No se pudo eliminar el código.', 'error');
+                    return false;
+                }
+                await fetchAndSyncFromSupabase();
+            } else {
+                db.access_codes = db.access_codes.filter(c => c.id !== codeId);
+                saveMockDb(db);
+            }
+            return true;
+        }
+
 
         // ==========================================
         // SCREEN RENDERERS
@@ -1477,9 +1510,14 @@
                             <td class="p-2 text-slate-500">${secName}</td>
                             <td class="p-2"><span class="px-1.5 py-0.2 rounded text-[8px] font-bold ${roleBadge}">${formatRoleLabel(c.role)}</span></td>
                             <td class="p-2 text-center">
-                                <button onclick="toggleCodeStatus('${c.id}', ${c.active}, 'owner')" class="px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${c.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-red-100 text-red-800 border-red-300'}">
-                                    ${c.active ? 'ACTIVO' : 'ANULADO'}
-                                </button>
+                                <div class="flex items-center justify-center gap-1.5">
+                                    <button onclick="toggleCodeStatus('${c.id}', ${c.active}, 'owner')" class="px-2.5 py-1 rounded-full text-[9px] font-bold border ${c.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-red-100 text-red-800 border-red-300'}">
+                                        ${c.active ? 'ACTIVO' : 'ANULADO'}
+                                    </button>
+                                    ${c.code.toUpperCase() === session.code.toUpperCase()
+                                        ? '<span class="text-[8px] text-slate-400 font-bold">SESIÓN ACTUAL</span>'
+                                        : `<button onclick="deleteAccessCode('${c.id}', 'owner')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-[8px] font-bold">🗑️ Eliminar</button>`}
+                                </div>
                             </td>
                         </tr>
                     `;
@@ -1690,9 +1728,12 @@
                                         </div>
                                         <div class="text-[10px] text-slate-700 font-semibold mt-1">Colaborador: ${code.name}</div>
                                     </div>
-                                    <button onclick="toggleCodeStatus('${code.id}', ${code.active}, 'admin')" class="px-2 py-0.5 rounded-full text-[8px] font-bold border transition ${code.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-red-100 text-red-800 border-red-300'}">
-                                        ${code.active ? 'Activo' : 'Anulado'}
-                                    </button>
+                                    <div class="flex gap-1">
+                                        <button onclick="toggleCodeStatus('${code.id}', ${code.active}, 'admin')" class="px-2 py-0.5 rounded-full text-[8px] font-bold border transition ${code.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-red-100 text-red-800 border-red-300'}">
+                                            ${code.active ? 'Activo' : 'Anulado'}
+                                        </button>
+                                        ${code.code.toUpperCase() === session.code.toUpperCase() ? '' : `<button onclick="deleteAccessCode('${code.id}', 'admin')" class="bg-red-600 text-white px-2 py-0.5 rounded text-[8px] font-bold">Eliminar</button>`}
+                                    </div>
                                 </div>
                                 <button onclick="handleShareCodeWhatsApp('${code.name}', '${code.code}', '${mySectorName}', '${code.role}')" class="w-full bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#075E54] border border-[#25D366]/30 py-1 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1 transition select-none">
                                     💬 Enviar Clave por WhatsApp
@@ -1887,6 +1928,9 @@
 
             // FULLSCREEN ADMIN INTERFACE
             if (session.role === 'admin') {
+                const adminCodes = db.access_codes
+                    .filter(code => code.sector_id === session.sector_id && code.role !== 'owner')
+                    .sort((a, b) => a.name.localeCompare(b.name));
                 html += `
                     <div class="grid grid-cols-2 gap-2 text-center select-none font-bold">
                         <button onclick="openAddMerchModal('fullscreen')" class="bg-[#198754] hover:bg-emerald-600 text-white text-[10px] py-2 rounded-xl transition shadow">
@@ -1953,6 +1997,40 @@
                     });
                 }
                 html += `</div>`;
+
+                html += `
+                    <section class="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <h5 class="text-[10px] font-extrabold text-slate-800 uppercase">🔑 Accesos del sector</h5>
+                                <p class="text-[8px] text-slate-500">Podés anular o eliminar definitivamente un acceso.</p>
+                            </div>
+                            <button onclick="openAddCodeModal('fullscreen')" class="bg-slate-800 text-white px-2.5 py-1.5 rounded-lg text-[8px] font-bold">➕ Nuevo</button>
+                        </div>
+                        <div class="space-y-1.5">
+                `;
+                if (!adminCodes.length) {
+                    html += `<div class="bg-white border border-slate-200 rounded-xl p-3 text-center text-[9px] text-slate-400">No hay accesos creados en este sector.</div>`;
+                } else {
+                    adminCodes.forEach(code => {
+                        const ownCode = code.code.toUpperCase() === session.code.toUpperCase();
+                        html += `
+                            <div class="bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="font-bold text-[10px] text-slate-800 truncate">${escapeHtml(assignedPersonName(code.name))}</div>
+                                    <div class="text-[8px] text-slate-500"><span class="font-mono font-bold">${escapeHtml(code.code)}</span> · ${formatRoleLabel(code.role)}</div>
+                                </div>
+                                <div class="flex items-center gap-1 shrink-0">
+                                    <button onclick="toggleCodeStatus('${code.id}', ${code.active}, 'fullscreen')" class="px-2 py-1 rounded-full text-[8px] font-bold border ${code.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-800 border-amber-300'}">${code.active ? 'ACTIVO' : 'ANULADO'}</button>
+                                    ${ownCode
+                                        ? '<span class="text-[7px] text-slate-400 font-bold">TU SESIÓN</span>'
+                                        : `<button onclick="deleteAccessCode('${code.id}', 'fullscreen')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-[8px] font-bold">🗑️ Eliminar</button>`}
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                html += `</div></section>`;
             }
 
             // FULLSCREEN OWNER INTERFACE — COMPLETE MANAGEMENT PANEL
@@ -2326,6 +2404,21 @@
             await db_toggleCodeActive(codeId, currentStatus);
             showToast("Clave Actualizada", "El estado del código ha sido modificado.", "info");
             if (!isLiveSupabase) renderAllScreens();
+        }
+
+        async function deleteAccessCode(codeId, screenContext) {
+            let user = null;
+            if (screenContext === 'owner') user = activeSessions.owner;
+            else if (screenContext === 'admin') user = activeSessions.admin;
+            else if (screenContext === 'fullscreen') user = activeSessions.fullscreen;
+            if (!user) return;
+
+            const db = getMockDb();
+            const target = db.access_codes.find(c => c.id === codeId);
+            if (!target) return;
+            if (!confirm(`¿Eliminar permanentemente el código ${target.code} de ${assignedPersonName(target.name)}? La auditoría histórica se conservará.`)) return;
+            const deleted = await db_deleteAccessCode(codeId, user);
+            if (deleted) showToast('Código eliminado', 'La persona ya no podrá ingresar. Su historial se conserva.', 'warning');
         }
 
         async function handleAddNewSector() {
