@@ -8,8 +8,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts (Playful, Natural & Modern theme) -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Supabase JS Client CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Firebase JS SDK (compat build, para poder usarlo directo sin bundler) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <!-- SheetJS CDN (Pure client-side Excel exporting with sheets, styles, and full format) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
@@ -317,71 +318,174 @@
             });
         }
 
+        // ==========================================
+        // TRADUCTOR FIRESTORE -> ESTILO SUPABASE
+        // Permite que el resto del código (30+ llamadas repartidas
+        // por todo el archivo) siga funcionando SIN cambios, usando
+        // la misma sintaxis .from().select().eq().single() etc.
+        // Cada colección usa el campo "id" también como ID del
+        // documento en Firestore, así .eq('id', x) resuelve directo
+        // a un documento sin tener que escanear toda la colección.
+        // ==========================================
+        class FirestoreQueryBuilder {
+            constructor(db, table) {
+                this.db = db;
+                this.table = table;
+                this.colRef = db.collection(table);
+                this._orderField = null;
+                this._orderAsc = true;
+                this._eqId = undefined;
+                this._neqId = undefined;
+                this._op = null; // { type: 'insert'|'update'|'upsert'|'delete', payload }
+                this._wantsSingle = false;
+            }
+            select() { return this; }
+            order(field, opts) { this._orderField = field; this._orderAsc = opts?.ascending !== false; return this; }
+            eq(field, value) {
+                if (field === 'id') this._eqId = value;
+                return this;
+            }
+            neq(field, value) {
+                if (field === 'id') this._neqId = value;
+                return this;
+            }
+            single() { this._wantsSingle = true; return this; }
+            insert(rows) { this._op = { type: 'insert', rows }; return this; }
+            update(patch) { this._op = { type: 'update', patch }; return this; }
+            upsert(rows) { this._op = { type: 'upsert', rows }; return this; }
+            delete() { this._op = { type: 'delete' }; return this; }
+
+            // Hace que "await builder" funcione igual que en supabase-js
+            then(resolve, reject) {
+                this._exec().then(resolve, reject);
+            }
+
+            async _exec() {
+                try {
+                    if (this._op) return await this._execWrite();
+                    return await this._execRead();
+                } catch (e) {
+                    console.error(`Firestore error [${this.table}]`, e);
+                    return { data: null, error: e };
+                }
+            }
+
+            async _execRead() {
+                if (this._eqId !== undefined) {
+                    const snap = await this.colRef.doc(this._eqId).get();
+                    const data = snap.exists ? snap.data() : null;
+                    return { data, error: null };
+                }
+                let q = this.colRef;
+                if (this._orderField) q = q.orderBy(this._orderField, this._orderAsc ? 'asc' : 'desc');
+                const snap = await q.get();
+                let rows = snap.docs.map(d => d.data());
+                if (this._neqId !== undefined) rows = rows.filter(r => r.id !== this._neqId);
+                if (this._wantsSingle) return { data: rows[0] || null, error: null };
+                return { data: rows, error: null };
+            }
+
+            async _execWrite() {
+                const { type } = this._op;
+                if (type === 'delete') {
+                    if (this._eqId !== undefined) {
+                        await this.colRef.doc(this._eqId).delete();
+                        return { data: null, error: null };
+                    }
+                    if (this._neqId !== undefined) {
+                        const snap = await this.colRef.get();
+                        const batch = this.db.batch();
+                        snap.docs.forEach(d => { if (d.id !== this._neqId) batch.delete(d.ref); });
+                        await batch.commit();
+                        return { data: null, error: null };
+                    }
+                    return { data: null, error: null };
+                }
+                if (type === 'update') {
+                    const id = this._eqId;
+                    if (id === undefined) return { data: null, error: new Error('update sin .eq(id, ...)') };
+                    await this.colRef.doc(id).set(this._op.patch, { merge: true });
+                    if (this._wantsSingle) {
+                        const snap = await this.colRef.doc(id).get();
+                        return { data: snap.data(), error: null };
+                    }
+                    return { data: null, error: null };
+                }
+                if (type === 'insert' || type === 'upsert') {
+                    const rows = this._op.rows.map(r => ({ ...r, id: r.id || crypto.randomUUID() }));
+                    const batch = this.db.batch();
+                    rows.forEach(r => batch.set(this.colRef.doc(r.id), r, { merge: type === 'upsert' }));
+                    await batch.commit();
+                    if (this._wantsSingle) return { data: rows[0], error: null };
+                    return { data: rows, error: null };
+                }
+            }
+        }
+
+        function firestoreClientAdapter(db) {
+            return { from: (table) => new FirestoreQueryBuilder(db, table) };
+        }
+
         function initSupabaseClient() {
-            let url = localStorage.getItem('SUPABASE_URL');
-            let key = localStorage.getItem('SUPABASE_KEY');
-            
-            // Credenciales incrustadas de Don Roberto (Agua Verde)
-            if (!url) {
-                url = 'https://rlstizjvlreskttbzsza.supabase.co';
-                localStorage.setItem('SUPABASE_URL', url);
-            }
-            if (!key) {
-                key = 'sb_publishable_7wGCQASPYs3i7skA0HusKQ_vnYOqS-m';
-                localStorage.setItem('SUPABASE_KEY', key);
-            }
-            
+            // Configuración de tu proyecto Firebase (agua-verde)
+            const firebaseConfig = {
+                apiKey: "AIzaSyCVRRBhyR6XydZSN6Sxn-Q2IMuZVPyzkVA",
+                authDomain: "device-streaming-3a58b5c9.firebaseapp.com",
+                projectId: "device-streaming-3a58b5c9",
+                storageBucket: "device-streaming-3a58b5c9.firebasestorage.app",
+                messagingSenderId: "1066536714420",
+                appId: "1:1066536714420:web:8738699461a93c4b2b17e1"
+            };
+
             const badge = document.getElementById('db-status-badge');
             const bannerText = document.getElementById('status-text');
             const fsBadge = document.getElementById('fs-badge');
 
-            if (url && key) {
-                try {
-                    supabaseClient = supabase.createClient(url, key);
-                    isLiveSupabase = true;
-                    
-                    badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span> CONECTADO A SUPABASE`;
-                    badge.className = "bg-emerald-950 text-emerald-200 px-3 py-1 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 shrink-0 border border-emerald-800";
-                    bannerText.innerHTML = "Tu aplicación está conectada a tu Base de Datos en la nube de Supabase.";
-                    if (fsBadge) fsBadge.innerHTML = "SUPABASE LIVE";
-                    
-                    setupSupabaseRealtime();
-                    fetchAndSyncFromSupabase();
-                    
-                } catch (e) {
-                    console.error("Error al conectar Supabase:", e);
-                    isLiveSupabase = false;
-                    localStorage.removeItem('SUPABASE_URL');
-                    localStorage.removeItem('SUPABASE_KEY');
-                    showToast("Error de Conexión", "No se pudo conectar a Supabase. Iniciando en Modo Demo.", "error");
-                }
-            } else {
+            try {
+                const app = firebase.initializeApp(firebaseConfig);
+                const db = firebase.firestore();
+                supabaseClient = firestoreClientAdapter(db);
+                isLiveSupabase = true;
+
+                badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span> CONECTADO A FIREBASE`;
+                badge.className = "bg-emerald-950 text-emerald-200 px-3 py-1 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 shrink-0 border border-emerald-800";
+                bannerText.innerHTML = "Tu aplicación está conectada a tu Base de Datos en la nube de Firebase.";
+                if (fsBadge) fsBadge.innerHTML = "FIREBASE LIVE";
+
+                setupSupabaseRealtime(db);
+                fetchAndSyncFromSupabase();
+
+            } catch (e) {
+                console.error("Error al conectar Firebase:", e);
                 isLiveSupabase = false;
                 badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span> SIMULADOR LOCAL`;
                 badge.className = "bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 shrink-0 border border-amber-200";
-                bannerText.innerHTML = "Ejecutando en Modo Simulador Local. Perfecto para pruebas rápidas.";
+                bannerText.innerHTML = "No se pudo conectar a Firebase. Ejecutando en Modo Simulador Local.";
                 if (fsBadge) fsBadge.innerHTML = "DEMO LOCAL";
+                showToast("Error de Conexión", "No se pudo conectar a Firebase. Iniciando en Modo Demo.", "error");
             }
         }
 
-        // Live Database Realtime listeners
-        function setupSupabaseRealtime() {
-            if (!supabaseClient) return;
-
-            supabaseClient.channel('agua-verde-channel-pro')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'merchandise' }, () => scheduleSupabaseSync())
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_history' }, () => scheduleSupabaseSync())
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'access_codes' }, () => scheduleSupabaseSync())
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'sectors' }, () => scheduleSupabaseSync())
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
-                    loadSettings();
+        // Live Database Realtime listeners (Firestore onSnapshot)
+        function setupSupabaseRealtime(db) {
+            if (!db) return;
+            const watchedTables = ['merchandise', 'inventory_history', 'access_codes', 'sectors'];
+            let firstSnapshot = {};
+            watchedTables.forEach(table => {
+                firstSnapshot[table] = true;
+                db.collection(table).onSnapshot(() => {
+                    // Ignoramos el primer disparo (carga inicial), solo nos interesan los cambios
+                    if (firstSnapshot[table]) { firstSnapshot[table] = false; return; }
                     scheduleSupabaseSync();
-                })
-                .subscribe((status) => {
-                    if (status === 'SUBSCRIBED') {
-                        showToast("Sincronización Activa 📡", "Conectado a la base de datos de Agua Verde.", "success");
-                    }
-                });
+                }, (err) => console.error(`Error de snapshot en ${table}:`, err));
+            });
+            db.collection('app_settings').onSnapshot(() => {
+                if (firstSnapshot['app_settings']) { firstSnapshot['app_settings'] = false; return; }
+                loadSettings();
+                scheduleSupabaseSync();
+            }, (err) => console.error('Error de snapshot en app_settings:', err));
+            firstSnapshot['app_settings'] = true;
+            showToast("Sincronización Activa 📡", "Conectado a la base de datos de Agua Verde.", "success");
         }
 
         function scheduleSupabaseSync(delay = 250) {
@@ -1160,6 +1264,73 @@
             }
         }
 
+        async function db_updateAccessCode(codeId, updates, userSession) {
+            const db = getMockDb();
+            const target = db.access_codes.find(c => c.id === codeId);
+            if (!target || !userSession) return false;
+
+            const isOwner = userSession.role === 'owner';
+            const adminAllowed = userSession.role === 'admin' &&
+                target.sector_id === userSession.sector_id && target.role !== 'owner';
+            if (!isOwner && !adminAllowed) {
+                showToast('Acceso denegado', 'Solo podés editar códigos autorizados de tu sector.', 'error');
+                return false;
+            }
+
+            const patch = {};
+            if (updates.name !== undefined) {
+                const cleanName = updates.name.trim();
+                if (!cleanName) {
+                    showToast('Nombre inválido', 'El nombre no puede quedar vacío.', 'warning');
+                    return false;
+                }
+                patch.name = cleanName;
+            }
+            if (updates.code !== undefined) {
+                const cleanCode = updates.code.trim().toUpperCase();
+                if (cleanCode.length < 4 || cleanCode.length > 6) {
+                    showModalAlert("⚠️ Código Inválido", "Error: El código de acceso debe tener obligatoriamente entre 4 y 6 caracteres.");
+                    return false;
+                }
+                const dup = db.access_codes.find(c => c.id !== codeId && c.code.toUpperCase() === cleanCode);
+                if (dup) {
+                    showToast("Duplicado", "Ese código ya está asignado a otra persona.", "warning");
+                    return false;
+                }
+                patch.code = cleanCode;
+            }
+            if (updates.can_manage_employees !== undefined) {
+                patch.can_manage_employees = !!updates.can_manage_employees;
+            }
+
+            if (Object.keys(patch).length === 0) return true;
+
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient.from('access_codes').update(patch).eq('id', codeId);
+                if (error) {
+                    console.error('Error al editar código:', error);
+                    showToast('Error', 'No se pudo guardar el cambio.', 'error');
+                    return false;
+                }
+                await fetchAndSyncFromSupabase();
+            } else {
+                Object.assign(target, patch);
+                saveMockDb(db);
+            }
+
+            // Si la persona editó su propia sesión activa, refrescamos ese estado en memoria
+            Object.keys(activeSessions).forEach(screenKey => {
+                const s = activeSessions[screenKey];
+                if (s && s.code && target.code && s.code.toUpperCase() === (patch.code || target.code).toUpperCase() && s.name) {
+                    if (patch.name) s.name = patch.name;
+                    if (patch.code) s.code = patch.code;
+                }
+            });
+
+            showToast('Guardado ✅', 'Los datos del código se actualizaron correctamente.', 'success');
+            return true;
+        }
+
         async function db_deleteAccessCode(codeId, userSession) {
             const db = getMockDb();
             const target = db.access_codes.find(c => c.id === codeId);
@@ -1514,6 +1685,7 @@
                                     <button onclick="toggleCodeStatus('${c.id}', ${c.active}, 'owner')" class="px-2.5 py-1 rounded-full text-[9px] font-bold border ${c.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-red-100 text-red-800 border-red-300'}">
                                         ${c.active ? 'ACTIVO' : 'ANULADO'}
                                     </button>
+                                    <button onclick="openEditCodeModal('${c.id}', 'owner')" class="bg-slate-700 hover:bg-slate-800 text-white px-2 py-1 rounded-lg text-[8px] font-bold">✏️ Editar</button>
                                     ${c.code.toUpperCase() === session.code.toUpperCase()
                                         ? '<span class="text-[8px] text-slate-400 font-bold">SESIÓN ACTUAL</span>'
                                         : `<button onclick="deleteAccessCode('${c.id}', 'owner')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-[8px] font-bold">🗑️ Eliminar</button>`}
@@ -1732,6 +1904,7 @@
                                         <button onclick="toggleCodeStatus('${code.id}', ${code.active}, 'admin')" class="px-2 py-0.5 rounded-full text-[8px] font-bold border transition ${code.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-red-100 text-red-800 border-red-300'}">
                                             ${code.active ? 'Activo' : 'Anulado'}
                                         </button>
+                                        <button onclick="openEditCodeModal('${code.id}', 'admin')" class="bg-slate-700 text-white px-2 py-0.5 rounded text-[8px] font-bold">✏️ Editar</button>
                                         ${code.code.toUpperCase() === session.code.toUpperCase() ? '' : `<button onclick="deleteAccessCode('${code.id}', 'admin')" class="bg-red-600 text-white px-2 py-0.5 rounded text-[8px] font-bold">Eliminar</button>`}
                                     </div>
                                 </div>
@@ -2022,6 +2195,7 @@
                                 </div>
                                 <div class="flex items-center gap-1 shrink-0">
                                     <button onclick="toggleCodeStatus('${code.id}', ${code.active}, 'fullscreen')" class="px-2 py-1 rounded-full text-[8px] font-bold border ${code.active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-800 border-amber-300'}">${code.active ? 'ACTIVO' : 'ANULADO'}</button>
+                                    <button onclick="openEditCodeModal('${code.id}', 'fullscreen')" class="bg-slate-700 hover:bg-slate-800 text-white px-2 py-1 rounded-lg text-[8px] font-bold">✏️</button>
                                     ${ownCode
                                         ? '<span class="text-[7px] text-slate-400 font-bold">TU SESIÓN</span>'
                                         : `<button onclick="deleteAccessCode('${code.id}', 'fullscreen')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-[8px] font-bold">🗑️ Eliminar</button>`}
@@ -2913,6 +3087,70 @@
                 const inserted = await db_createCode(codeText, name, role, sectorId);
                 if (inserted) {
                     showToast("Clave Generada", `Acceso asignado para ${name}.`, "success");
+                    document.getElementById('dynamic-modal').remove();
+                    if (!isLiveSupabase) renderAllScreens();
+                }
+            };
+        }
+
+        async function openEditCodeModal(codeId, screenContext) {
+            let user = null;
+            if (screenContext === 'owner') user = activeSessions.owner;
+            else if (screenContext === 'admin') user = activeSessions.admin;
+            else if (screenContext === 'fullscreen') user = activeSessions.fullscreen;
+            if (!user) return;
+
+            const db = getMockDb();
+            const target = db.access_codes.find(c => c.id === codeId);
+            if (!target) return;
+
+            // Solo el dueño puede otorgar el permiso de gestionar Empleados,
+            // y solo tiene sentido dárselo a un código de rango "admin".
+            const showEmployeePermToggle = user.role === 'owner' && target.role === 'admin';
+
+            const modal = document.createElement('div');
+            modal.className = "fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+            modal.id = "dynamic-modal";
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-200">
+                    <div class="bg-slate-900 text-white p-4 font-bold flex justify-between items-center border-b border-emerald-950">
+                        <h4 class="text-sm font-serif">✏️ Editar Clave de Entrada</h4>
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="text-white hover:text-red-300 font-bold text-lg leading-none">&times;</button>
+                    </div>
+                    <div class="p-4 space-y-3.5 text-xs">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre Completo del Colaborador</label>
+                            <input type="text" id="edit-code-name" value="${escapeHtml(target.name)}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 focus:ring-1 focus:ring-emerald-700 outline-none font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Clave de Seguridad (4 a 6 Letras/Números)</label>
+                            <input type="text" id="edit-code-text" maxlength="6" value="${escapeHtml(target.code)}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 focus:ring-1 focus:ring-emerald-700 outline-none font-mono uppercase tracking-widest text-center text-sm font-bold">
+                            <p class="text-[9px] text-slate-400 mt-1">Obligatorio: Entre 4 y 6 caracteres.</p>
+                        </div>
+                        ${showEmployeePermToggle ? `
+                        <label class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 cursor-pointer">
+                            <input type="checkbox" id="edit-code-emp-perm" ${target.can_manage_employees ? 'checked' : ''} class="w-4 h-4 accent-emerald-700">
+                            <span class="text-[10px] font-bold text-slate-600">Puede acceder al módulo de Empleados</span>
+                        </label>
+                        ` : ''}
+                    </div>
+                    <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-2 text-xs font-bold">
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl">Cancelar</button>
+                        <button id="btn-submit-edit-code" class="bg-slate-950 text-white hover:bg-slate-800 px-3.5 py-2 rounded-xl shadow">Guardar Cambios 💾</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById('btn-submit-edit-code').onclick = async () => {
+                const name = document.getElementById('edit-code-name').value;
+                const codeText = document.getElementById('edit-code-text').value;
+                const updates = { name, code: codeText };
+                if (showEmployeePermToggle) {
+                    updates.can_manage_employees = document.getElementById('edit-code-emp-perm').checked;
+                }
+                const ok = await db_updateAccessCode(codeId, updates, user);
+                if (ok) {
                     document.getElementById('dynamic-modal').remove();
                     if (!isLiveSupabase) renderAllScreens();
                 }

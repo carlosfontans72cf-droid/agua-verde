@@ -1,0 +1,45 @@
+rules_version = '2';
+
+// Reglas para Agua Verde.
+// Nota honesta: como la app valida el acceso con "códigos" (DUE12, ADM11, etc.)
+// en vez de usar el sistema de autenticación real de Firebase, no hay forma
+// de que Firestore sepa "quién sos" para bloquear por rol a nivel de servidor.
+// Esto da el mismo nivel de seguridad que tenías antes en Supabase con la
+// clave pública (anon key): cualquiera con el link de la app puede leer/escribir,
+// pero nadie puede hacerlo sin pasar por la pantalla de código de la app... salvo
+// que alguien copie tu configuración de Firebase y programe su propio cliente.
+// Si en el futuro querés blindarlo mejor (recomendado a mediano plazo), se puede
+// agregar autenticación anónima de Firebase + reglas por rol. Por ahora, prioriza
+// que la migración funcione igual que tu sistema actual sin romper nada.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /sectors/{docId} {
+      allow read, write: if true;
+    }
+    match /access_codes/{docId} {
+      allow read, write: if true;
+    }
+    match /merchandise/{docId} {
+      allow read, write: if true;
+    }
+    match /inventory_history/{docId} {
+      allow read, write: if true;
+    }
+    match /app_settings/{docId} {
+      allow read, write: if true;
+    }
+    match /employees/{docId} {
+      allow read, write: if true;
+    }
+    match /employee_advances/{docId} {
+      allow read, write: if true;
+    }
+    match /employee_payments/{docId} {
+      allow read, write: if true;
+    }
+    match /employee_settlements/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Migración Agua Verde: Supabase → Firebase</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 680px; margin: 40px auto; padding: 0 16px; background:#0f172a; color:#e2e8f0; }
+  h1 { color:#34d399; font-size: 20px; }
+  button { background:#059669; color:white; border:none; padding: 12px 20px; border-radius: 10px; font-weight:bold; cursor:pointer; font-size:14px; }
+  button:disabled { background:#475569; cursor:not-allowed; }
+  #log { margin-top: 20px; background:#020617; border-radius: 10px; padding: 14px; font-family: monospace; font-size: 12px; white-space: pre-wrap; height: 360px; overflow-y:auto; border:1px solid #334155; }
+  .warn { background:#7c2d12; border:1px solid #ea580c; padding:12px; border-radius:10px; margin-bottom:16px; font-size:13px; }
+</style>
+</head>
+<body>
+  <h1>🔄 Migración única: Supabase → Firebase (Agua Verde)</h1>
+  <div class="warn">
+    ⚠️ Usá esta página UNA SOLA VEZ. Copia todo lo que tengas hoy en Supabase
+    (sectores, códigos, mercadería, historial y configuración) y lo escribe en
+    tu proyecto nuevo de Firebase. No borra nada de Supabase. Después de migrar,
+    podés borrar este archivo del proyecto — ya no hace falta.
+  </div>
+  <button id="btnMigrar">▶ Iniciar Migración</button>
+  <div id="log">Esperando que apretés "Iniciar Migración"...\n</div>
+
+<script>
+const logEl = document.getElementById('log');
+function log(msg) {
+  logEl.textContent += msg + "\n";
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+document.getElementById('btnMigrar').onclick = async () => {
+  document.getElementById('btnMigrar').disabled = true;
+  logEl.textContent = '';
+
+  try {
+    // --- 1. Conectar a Supabase (origen) ---
+    log('Conectando a Supabase...');
+    const supa = supabase.createClient(
+      'https://rlstizjvlreskttbzsza.supabase.co',
+      'sb_publishable_7wGCQASPYs3i7skA0HusKQ_vnYOqS-m'
+    );
+
+    // --- 2. Conectar a Firebase (destino) ---
+    log('Conectando a Firebase...');
+    const firebaseConfig = {
+      apiKey: "AIzaSyCVRRBhyR6XydZSN6Sxn-Q2IMuZVPyzkVA",
+      authDomain: "device-streaming-3a58b5c9.firebaseapp.com",
+      projectId: "device-streaming-3a58b5c9",
+      storageBucket: "device-streaming-3a58b5c9.firebasestorage.app",
+      messagingSenderId: "1066536714420",
+      appId: "1:1066536714420:web:8738699461a93c4b2b17e1"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const tablas = ['sectors', 'access_codes', 'merchandise', 'inventory_history'];
+
+    for (const tabla of tablas) {
+      log(`\n📦 Leyendo tabla "${tabla}" de Supabase...`);
+      const { data, error } = await supa.from(tabla).select('*');
+      if (error) {
+        log(`   ❌ Error leyendo ${tabla}: ${error.message}`);
+        continue;
+      }
+      log(`   Encontrados ${data.length} registros.`);
+      if (data.length === 0) continue;
+
+      const batch = db.batch();
+      data.forEach(row => {
+        const ref = db.collection(tabla).doc(String(row.id));
+        batch.set(ref, row, { merge: true });
+      });
+      await batch.commit();
+      log(`   ✅ ${data.length} registros copiados a Firebase.`);
+    }
+
+    // app_settings es una tabla especial (config general de la app)
+    log(`\n⚙️ Leyendo configuración (app_settings)...`);
+    const { data: settingsData, error: settingsError } = await supa.from('app_settings').select('*').eq('id', 'config').single();
+    if (!settingsError && settingsData) {
+      await db.collection('app_settings').doc('config').set(settingsData, { merge: true });
+      log('   ✅ Configuración copiada.');
+    } else {
+      log('   (No había configuración guardada, se omite — no es un error.)');
+    }
+
+    log('\n🎉 ¡MIGRACIÓN COMPLETA! Ya podés abrir la app normal (index.html).');
+    log('   Recordá: podés borrar este archivo migrar-datos.html cuando quieras.');
+  } catch (e) {
+    log('\n❌ ERROR GENERAL: ' + e.message);
+    console.error(e);
+  }
+
+  document.getElementById('btnMigrar').disabled = false;
+};
+</script>
+</body>
+</html>
