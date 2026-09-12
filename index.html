@@ -344,21 +344,14 @@
                 this.colRef = db.collection(table);
                 this._orderField = null;
                 this._orderAsc = true;
-                this._eqId = undefined;
-                this._neqId = undefined;
+                this._filters = []; // { field, op: 'eq'|'neq', value }
                 this._op = null; // { type: 'insert'|'update'|'upsert'|'delete', payload }
                 this._wantsSingle = false;
             }
             select() { return this; }
             order(field, opts) { this._orderField = field; this._orderAsc = opts?.ascending !== false; return this; }
-            eq(field, value) {
-                if (field === 'id') this._eqId = value;
-                return this;
-            }
-            neq(field, value) {
-                if (field === 'id') this._neqId = value;
-                return this;
-            }
+            eq(field, value) { this._filters.push({ field, op: 'eq', value }); return this; }
+            neq(field, value) { this._filters.push({ field, op: 'neq', value }); return this; }
             single() { this._wantsSingle = true; return this; }
             insert(rows) { this._op = { type: 'insert', rows }; return this; }
             update(patch) { this._op = { type: 'update', patch }; return this; }
@@ -380,43 +373,70 @@
                 }
             }
 
+            _matchesRemainingFilters(row, skipIdEq) {
+                return this._filters.every(f => {
+                    if (skipIdEq && f.field === 'id' && f.op === 'eq') return true;
+                    const rowVal = row ? row[f.field] : undefined;
+                    if (f.op === 'eq') return rowVal === f.value;
+                    if (f.op === 'neq') return rowVal !== f.value;
+                    return true;
+                });
+            }
+
+            _idEqValue() {
+                const f = this._filters.find(f => f.field === 'id' && f.op === 'eq');
+                return f ? f.value : undefined;
+            }
+            _idNeqValue() {
+                const f = this._filters.find(f => f.field === 'id' && f.op === 'neq');
+                return f ? f.value : undefined;
+            }
+
             async _execRead() {
-                if (this._eqId !== undefined) {
-                    const snap = await this.colRef.doc(this._eqId).get();
-                    const data = snap.exists ? snap.data() : null;
-                    return { data, error: null };
+                const idEq = this._idEqValue();
+                let rows;
+                if (idEq !== undefined) {
+                    const snap = await this.colRef.doc(idEq).get();
+                    rows = snap.exists ? [snap.data()] : [];
+                    rows = rows.filter(r => this._matchesRemainingFilters(r, true));
+                } else {
+                    let q = this.colRef;
+                    if (this._orderField) q = q.orderBy(this._orderField, this._orderAsc ? 'asc' : 'desc');
+                    const snap = await q.get();
+                    rows = snap.docs.map(d => d.data()).filter(r => this._matchesRemainingFilters(r, false));
                 }
-                let q = this.colRef;
-                if (this._orderField) q = q.orderBy(this._orderField, this._orderAsc ? 'asc' : 'desc');
-                const snap = await q.get();
-                let rows = snap.docs.map(d => d.data());
-                if (this._neqId !== undefined) rows = rows.filter(r => r.id !== this._neqId);
                 if (this._wantsSingle) return { data: rows[0] || null, error: null };
                 return { data: rows, error: null };
             }
 
             async _execWrite() {
                 const { type } = this._op;
+                const idEq = this._idEqValue();
                 if (type === 'delete') {
-                    if (this._eqId !== undefined) {
-                        await this.colRef.doc(this._eqId).delete();
+                    if (idEq !== undefined) {
+                        await this.colRef.doc(idEq).delete();
                         return { data: null, error: null };
                     }
-                    if (this._neqId !== undefined) {
+                    const idNeq = this._idNeqValue();
+                    if (idNeq !== undefined) {
                         const snap = await this.colRef.get();
                         const batch = this.db.batch();
-                        snap.docs.forEach(d => { if (d.id !== this._neqId) batch.delete(d.ref); });
+                        snap.docs.forEach(d => { if (d.id !== idNeq && this._matchesRemainingFilters(d.data(), false)) batch.delete(d.ref); });
                         await batch.commit();
                         return { data: null, error: null };
                     }
+                    // Delete masivo con filtros por otros campos (sin id)
+                    const snap = await this.colRef.get();
+                    const batch = this.db.batch();
+                    snap.docs.forEach(d => { if (this._matchesRemainingFilters(d.data(), false)) batch.delete(d.ref); });
+                    await batch.commit();
                     return { data: null, error: null };
                 }
                 if (type === 'update') {
-                    const id = this._eqId;
-                    if (id === undefined) return { data: null, error: new Error('update sin .eq(id, ...)') };
-                    await this.colRef.doc(id).set(this._op.patch, { merge: true });
+                    if (idEq === undefined) return { data: null, error: new Error('update sin .eq(id, ...)') };
+                    await this.colRef.doc(idEq).set(this._op.patch, { merge: true });
                     if (this._wantsSingle) {
-                        const snap = await this.colRef.doc(id).get();
+                        const snap = await this.colRef.doc(idEq).get();
                         return { data: snap.data(), error: null };
                     }
                     return { data: null, error: null };
