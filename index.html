@@ -131,7 +131,7 @@
     </header>
 
     <!-- TOAST NOTIFICATION CONTAINER -->
-    <div id="toast-container" class="fixed top-5 right-5 z-55 flex flex-col gap-2 pointer-events-none"></div>
+    <div id="toast-container" class="fixed top-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
 
     <!-- MAIN BODY CONTAINER -->
     <main class="flex-grow p-4 md:p-6 max-w-7xl w-full mx-auto flex flex-col gap-6">
@@ -1440,6 +1440,34 @@
             return type || '-';
         }
 
+        // Estado de un documento con vencimiento: null (no cargado), 'ok', 'por_vencer' (<=30 días), 'vencido'
+        function docExpiryStatus(dateStr) {
+            if (!dateStr) return null;
+            const today = new Date(); today.setHours(0,0,0,0);
+            const expiry = new Date(dateStr);
+            const diffDays = Math.round((expiry - today) / (1000 * 60 * 60 * 24));
+            if (diffDays < 0) return 'vencido';
+            if (diffDays <= 30) return 'por_vencer';
+            return 'ok';
+        }
+
+        function employeeDocsWarningBadge(emp) {
+            const docs = [
+                { label: 'Carnet de Salud', date: emp.health_card_expiry },
+                { label: 'Carnet Manip. Alimentos', date: emp.food_handler_card_expiry },
+                { label: 'Libreta de Conducir', date: emp.driver_license_expiry }
+            ];
+            const problemDocs = docs.filter(d => {
+                const s = docExpiryStatus(d.date);
+                return s === 'vencido' || s === 'por_vencer';
+            });
+            if (problemDocs.length === 0) return '';
+            const anyVencido = problemDocs.some(d => docExpiryStatus(d.date) === 'vencido');
+            const color = anyVencido ? 'bg-red-100 text-red-700 border-red-300' : 'bg-amber-100 text-amber-700 border-amber-300';
+            const texto = problemDocs.map(d => `${d.label} ${docExpiryStatus(d.date) === 'vencido' ? 'VENCIDO' : 'por vencer'}`).join(' · ');
+            return `<p class="text-[9px] font-bold mt-0.5 px-1.5 py-0.5 rounded border inline-block ${color}">⚠️ ${texto}</p>`;
+        }
+
         // --- ALTAS / CARGOS (empleados) ---
         async function db_createEmployee(employee, userSession) {
             if (!canManageEmployees(userSession)) {
@@ -1461,6 +1489,9 @@
                 end_date: null,
                 active: true,
                 notes: (employee.notes || '').trim(),
+                health_card_expiry: employee.health_card_expiry || null,
+                food_handler_card_expiry: employee.food_handler_card_expiry || null,
+                driver_license_expiry: employee.driver_license_expiry || null,
                 created_at: new Date().toISOString()
             };
 
@@ -1793,6 +1824,7 @@
                         <p class="font-extrabold text-sm text-slate-800 truncate">${escapeHtml(emp.name)}</p>
                         <p class="text-[10px] text-slate-500 truncate">${escapeHtml(emp.position || 'Sin cargo asignado')} · ${employmentTypeLabel(emp.employment_type)}</p>
                         ${adelantosPendientes > 0 ? `<p class="text-[10px] text-amber-600 font-bold mt-0.5">Adelantos pendientes: ${formatUYU(adelantosPendientes)}</p>` : ''}
+                        ${employeeDocsWarningBadge(emp)}
                         ${!emp.active ? `<p class="text-[9px] text-red-500 font-bold mt-0.5">BAJA: ${emp.end_date || '-'}</p>` : ''}
                     </div>
                     <div class="flex gap-1.5 shrink-0">
@@ -1845,6 +1877,20 @@
                             <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Notas (opcional)</label>
                             <textarea id="emp-notes" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none"></textarea>
                         </div>
+                        <hr class="border-slate-100">
+                        <p class="text-[10px] font-bold uppercase text-slate-500">Documentación (opcional)</p>
+                        <div>
+                            <label class="block text-[9px] font-bold text-slate-500 mb-1">🩺 Vencimiento Carnet de Salud</label>
+                            <input type="date" id="emp-health-card" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold text-slate-500 mb-1">🍽️ Vencimiento Carnet Manipulación de Alimentos</label>
+                            <input type="date" id="emp-food-card" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold text-slate-500 mb-1">🚗 Vencimiento Libreta de Conducir</label>
+                            <input type="date" id="emp-driver-license" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                        </div>
                     </div>
                     <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-2 text-xs font-bold shrink-0">
                         <button onclick="document.getElementById('dynamic-modal').remove()" class="bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl">Cancelar</button>
@@ -1862,7 +1908,10 @@
                     employment_type: document.getElementById('emp-type').value,
                     pay_rate: document.getElementById('emp-rate').value,
                     start_date: document.getElementById('emp-start').value,
-                    notes: document.getElementById('emp-notes').value
+                    notes: document.getElementById('emp-notes').value,
+                    health_card_expiry: document.getElementById('emp-health-card').value,
+                    food_handler_card_expiry: document.getElementById('emp-food-card').value,
+                    driver_license_expiry: document.getElementById('emp-driver-license').value
                 }, getCurrentOwnerOrAdminSession());
                 if (ok) {
                     document.getElementById('dynamic-modal').remove();
@@ -1948,6 +1997,20 @@
             return '';
         }
 
+        function renderDocField(inputId, label, dateValue) {
+            const status = docExpiryStatus(dateValue);
+            let badge = '';
+            if (status === 'vencido') badge = '<span class="text-[8px] font-bold text-red-600">VENCIDO</span>';
+            else if (status === 'por_vencer') badge = '<span class="text-[8px] font-bold text-amber-600">POR VENCER</span>';
+            else if (status === 'ok') badge = '<span class="text-[8px] font-bold text-emerald-600">VIGENTE</span>';
+            return `
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-500 mb-1">${label} ${badge}</label>
+                    <input type="date" id="${inputId}" value="${dateValue || ''}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                </div>
+            `;
+        }
+
         function renderEmpTabDatos(emp) {
             return `
                 <div>
@@ -1982,6 +2045,11 @@
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Notas</label>
                     <textarea id="edit-emp-notes" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">${escapeHtml(emp.notes || '')}</textarea>
                 </div>
+                <hr class="border-slate-100">
+                <p class="text-[10px] font-bold uppercase text-slate-500">Documentación (opcional)</p>
+                ${renderDocField('edit-emp-health-card', '🩺 Vencimiento Carnet de Salud', emp.health_card_expiry)}
+                ${renderDocField('edit-emp-food-card', '🍽️ Vencimiento Carnet Manipulación de Alimentos', emp.food_handler_card_expiry)}
+                ${renderDocField('edit-emp-driver-license', '🚗 Vencimiento Libreta de Conducir', emp.driver_license_expiry)}
                 <button onclick="submitEditEmployeeDatos('${emp.id}')" class="w-full bg-slate-950 text-white font-bold py-2.5 rounded-xl">💾 Guardar Cambios</button>
                 <hr class="border-slate-100">
                 ${emp.active
@@ -1999,10 +2067,12 @@
                 employment_type: document.getElementById('edit-emp-type').value,
                 pay_rate: Number(document.getElementById('edit-emp-rate').value) || 0,
                 start_date: document.getElementById('edit-emp-start').value,
-                notes: document.getElementById('edit-emp-notes').value.trim()
+                notes: document.getElementById('edit-emp-notes').value.trim(),
+                health_card_expiry: document.getElementById('edit-emp-health-card').value || null,
+                food_handler_card_expiry: document.getElementById('edit-emp-food-card').value || null,
+                driver_license_expiry: document.getElementById('edit-emp-driver-license').value || null
             }, getCurrentOwnerOrAdminSession());
-            if (ok && !isLiveSupabase) renderEmployeeManageModal();
-            if (ok) renderAllScreens();
+            if (ok) { renderEmployeeManageModal(); renderAllScreens(); }
         }
 
         async function submitDeactivateEmployee(employeeId) {
@@ -2017,11 +2087,19 @@
         function renderEmpTabAdelantos(emp, db) {
             const advances = db.employee_advances.filter(a => a.employee_id === emp.id).sort((a,b) => new Date(b.date) - new Date(a.date));
             const pendiente = advances.filter(a => !a.settled).reduce((s,a) => s + Number(a.amount), 0);
+            const saldoEstimado = (emp.pay_rate || 0) - pendiente;
             return `
                 <div class="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-center">
                     <span class="text-[9px] uppercase font-bold text-amber-800 block">Total Pendiente (sin liquidar)</span>
                     <span class="text-lg font-extrabold text-amber-900">${formatUYU(pendiente)}</span>
                 </div>
+                ${emp.pay_rate > 0 ? `
+                <div class="bg-cyan-50 border border-cyan-200 rounded-xl p-2.5 text-center">
+                    <span class="text-[9px] uppercase font-bold text-cyan-800 block">Saldo Estimado a Cobrar (${employmentTypeLabel(emp.employment_type)}: ${formatUYU(emp.pay_rate)})</span>
+                    <span class="text-lg font-extrabold text-cyan-900">${formatUYU(saldoEstimado)}</span>
+                    <p class="text-[8px] text-cyan-700 mt-0.5">Referencia: sueldo/jornal de referencia menos adelantos pendientes. No descuenta los pagos ya registrados en "Pagos".</p>
+                </div>
+                ` : ''}
                 <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
                     <p class="text-[10px] font-bold uppercase text-slate-500">Nuevo Adelanto</p>
                     <input type="number" id="adv-amount" placeholder="Monto ($)" min="0" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
@@ -2114,6 +2192,8 @@
                 previewHtml = `
                     <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-1">
                         <p class="text-[10px] font-bold uppercase text-emerald-800">Resultado del Cálculo</p>
+                        <div class="flex justify-between text-slate-500"><span>Período calculado</span><span class="font-bold">${p.dias_trabajados_total} días</span></div>
+                        ${p.dias_trabajados_total === 0 ? `<p class="text-[9px] text-red-600 font-bold">⚠️ La fecha de ingreso y egreso son iguales, por eso todo da $0. Revisá la Fecha de Ingreso.</p>` : ''}
                         <div class="flex justify-between"><span>Aguinaldo proporcional</span><span class="font-bold">${formatUYU(p.aguinaldo)}</span></div>
                         <div class="flex justify-between"><span>Licencia no gozada (${p.dias_licencia} días)</span><span class="font-bold">${formatUYU(p.licencia_no_gozada)}</span></div>
                         <div class="flex justify-between"><span>Salario vacacional</span><span class="font-bold">${formatUYU(p.salario_vacacional)}</span></div>
@@ -2142,7 +2222,7 @@
                     <label class="text-[9px] font-bold text-slate-500">Fecha de Egreso</label>
                     <input type="date" id="liq-end" value="${new Date().toISOString().slice(0,10)}" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
                     <label class="text-[9px] font-bold text-slate-500">Mejor Sueldo Mensual de Referencia ($)</label>
-                    <input type="number" id="liq-salary" value="${emp.employment_type === 'anual' ? (emp.pay_rate || 0) : ''}" min="0" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <input type="number" id="liq-salary" value="${emp.pay_rate || ''}" min="0" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
                     <label class="text-[9px] font-bold text-slate-500">Meses de Aguinaldo ya pagados en el período (0 a 12)</label>
                     <input type="number" id="liq-aguinaldo-pagado" value="0" min="0" max="12" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
                     <button onclick="submitCalcSettlement('${emp.id}')" class="w-full bg-slate-800 hover:bg-slate-950 text-white font-bold py-2.5 rounded-xl">🧮 Calcular (Automático UY)</button>
