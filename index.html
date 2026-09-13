@@ -1537,6 +1537,33 @@
             return db_updateEmployee(employeeId, { active: true, end_date: null }, userSession);
         }
 
+        // Borrado DEFINITIVO: elimina el empleado y todo su historial asociado
+        // (adelantos, pagos, liquidaciones). Solo para el dueño, pensado para
+        // limpiar bajas viejas que ya no hacen falta conservar.
+        async function db_hardDeleteEmployee(employeeId, userSession) {
+            if (!userSession || userSession.role !== 'owner') {
+                showToast('Acceso denegado', 'Solo el dueño puede borrar definitivamente a un empleado.', 'error');
+                return false;
+            }
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('employee_advances').delete().eq('employee_id', employeeId);
+                await supabaseClient.from('employee_payments').delete().eq('employee_id', employeeId);
+                await supabaseClient.from('employee_settlements').delete().eq('employee_id', employeeId);
+                const { error } = await supabaseClient.from('employees').delete().eq('id', employeeId);
+                if (error) { console.error(error); showToast('Error', 'No se pudo borrar al empleado.', 'error'); return false; }
+                await fetchAndSyncFromSupabase();
+            } else {
+                const db = getMockDb();
+                db.employees = db.employees.filter(e => e.id !== employeeId);
+                db.employee_advances = db.employee_advances.filter(a => a.employee_id !== employeeId);
+                db.employee_payments = db.employee_payments.filter(p => p.employee_id !== employeeId);
+                db.employee_settlements = db.employee_settlements.filter(s => s.employee_id !== employeeId);
+                saveMockDb(db);
+            }
+            showToast('Empleado eliminado 🗑️', 'El registro y su historial fueron borrados definitivamente.', 'success');
+            return true;
+        }
+
         // --- ADELANTOS ---
         async function db_createAdvance(advance, userSession) {
             if (!canManageEmployees(userSession)) {
@@ -1780,9 +1807,14 @@
                     </div>
                 </div>
 
-                <button onclick="openAddEmployeeModal()" class="w-full bg-[#0d3a22] hover:bg-emerald-800 text-white font-bold text-xs py-3 rounded-xl shadow-md transition">
-                    ➕ Nueva Alta de Empleado
-                </button>
+                <div class="flex gap-2">
+                    <button onclick="openAddEmployeeModal()" class="flex-1 bg-[#0d3a22] hover:bg-emerald-800 text-white font-bold text-xs py-3 rounded-xl shadow-md transition">
+                        ➕ Nueva Alta de Empleado
+                    </button>
+                    <button onclick="exportEmployeesToExcel()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-4 py-3 rounded-xl shadow-md transition whitespace-nowrap">
+                        📥 Excel
+                    </button>
+                </div>
 
                 <div class="space-y-2">
             `;
@@ -1829,6 +1861,7 @@
                     </div>
                     <div class="flex gap-1.5 shrink-0">
                         <button onclick="openEmployeeManageModal('${emp.id}')" class="bg-slate-800 hover:bg-slate-950 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold">📋 Gestionar</button>
+                        ${!emp.active ? `<button onclick="submitHardDeleteEmployee('${emp.id}', '${escapeHtml(emp.name).replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold">🗑️ Borrar</button>` : ''}
                     </div>
                 </div>
             `;
@@ -1935,6 +1968,72 @@
             if (activeSessions.admin && canManageEmployees(activeSessions.admin)) return activeSessions.admin;
             if (activeSessions.fullscreen && canManageEmployees(activeSessions.fullscreen)) return activeSessions.fullscreen;
             return null;
+        }
+
+        function exportEmployeesToExcel() {
+            const db = getMockDb();
+
+            const empData = db.employees.map(e => ({
+                "Nombre": e.name,
+                "Cédula": e.document_id || '',
+                "Cargo": e.position || '',
+                "Tipo": employmentTypeLabel(e.employment_type),
+                "Monto de Referencia": e.pay_rate || 0,
+                "Estado": e.active ? "Activo" : "Baja",
+                "Fecha de Ingreso": e.start_date || '',
+                "Fecha de Egreso": e.end_date || '',
+                "Vto. Carnet de Salud": e.health_card_expiry || '',
+                "Vto. Carnet Manipulación Alimentos": e.food_handler_card_expiry || '',
+                "Vto. Libreta de Conducir": e.driver_license_expiry || '',
+                "Notas": e.notes || ''
+            }));
+
+            const nameById = id => { const e = db.employees.find(x => x.id === id); return e ? e.name : '(borrado)'; };
+
+            const advData = db.employee_advances.map(a => ({
+                "Empleado": nameById(a.employee_id),
+                "Monto": a.amount,
+                "Fecha": a.date,
+                "Motivo": a.note || '',
+                "Liquidado": a.settled ? "Sí" : "No"
+            }));
+
+            const payData = db.employee_payments.map(p => ({
+                "Empleado": nameById(p.employee_id),
+                "Monto": p.amount,
+                "Fecha": p.date,
+                "Período": p.period_label || '',
+                "Tipo": p.type,
+                "Nota": p.note || ''
+            }));
+
+            const settlementData = db.employee_settlements.map(s => ({
+                "Empleado": nameById(s.employee_id),
+                "Motivo": s.settlement_type,
+                "Fecha Ingreso": s.start_date,
+                "Fecha Egreso": s.end_date,
+                "Sueldo de Referencia": s.monthly_salary_ref,
+                "Total Bruto": s.total_bruto,
+                "Adelantos Descontados": s.adelantos_descontados,
+                "Total Pagado": s.total,
+                "Fecha de Generación": new Date(s.created_at).toLocaleString()
+            }));
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(empData), "Empleados");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(advData), "Adelantos");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(payData), "Pagos");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(settlementData), "Liquidaciones");
+
+            const fileName = `Empleados_${systemSettings.app_name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            showToast("📥 Excel Descargado", "Planilla de Empleados descargada con éxito.", "success");
+        }
+
+        async function submitHardDeleteEmployee(employeeId, employeeName) {
+            if (!confirm(`⚠️ ¡ADVERTENCIA! Vas a borrar definitivamente a "${employeeName}" junto con TODOS sus adelantos, pagos y liquidaciones registrados. Esta acción NO se puede deshacer. ¿Continuar?`)) return;
+            const ok = await db_hardDeleteEmployee(employeeId, getCurrentOwnerOrAdminSession());
+            if (ok) renderAllScreens();
         }
 
         function openEmployeeManageModal(employeeId) {
@@ -2432,7 +2531,7 @@
                                 </td>
                                 <td class="p-2 text-[10px] text-slate-500">
                                     <div class="font-bold truncate max-w-[110px]">${item.updated_by || 'Inicial'}</div>
-                                    <div class="text-[8px] text-slate-400">${new Date(item.updated_at).toLocaleTimeString()}</div>
+                                    <div class="text-[8px] text-slate-400">${new Date(item.updated_at).toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit', year: '2-digit' })} · ${new Date(item.updated_at).toLocaleTimeString()}</div>
                                 </td>
                                 <td class="p-2 text-center">
                                     <div class="flex items-center justify-center gap-1">
