@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Firebase JS SDK (compat build, para poder usarlo directo sin bundler) -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <!-- SheetJS CDN (Pure client-side Excel exporting with sheets, styles, and full format) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -181,12 +182,14 @@
         // ==========================================
         let isLiveSupabase = false;
         let supabaseClient = null;
+        let firestoreDb = null; // referencia directa a Firestore, para operaciones masivas (archivado, etc.)
 
         // Custom config settings state (modifiable dynamically by owner)
         let systemSettings = {
             app_name: "Agua Verde",
             low_stock_threshold: 5,
-            large_adjustment_threshold: 5
+            large_adjustment_threshold: 5,
+            session_timeout_hours: 4
         };
 
         const INITIAL_MOCK_DB = {
@@ -296,13 +299,42 @@
             setInterval(() => {
                 if (!document.hidden) scheduleSupabaseSync(0);
             }, 30000);
+
+            // --- Cierre de sesión automático por inactividad ---
+            // Protege el sistema si alguien deja una sesión abierta en un
+            // celular o computadora compartida. Configurable en "Configuración No-Code".
+            ['click', 'keydown', 'touchstart', 'mousemove', 'scroll'].forEach(evt => {
+                document.addEventListener(evt, () => { lastActivityAt = Date.now(); }, { passive: true });
+            });
+            setInterval(checkSessionInactivity, 60000); // revisa cada 1 minuto
         });
+
+        let lastActivityAt = Date.now();
+
+        function checkSessionInactivity() {
+            const timeoutHours = Number(systemSettings.session_timeout_hours);
+            if (!timeoutHours || timeoutHours <= 0) return; // 0 = desactivado
+
+            const anySessionActive = activeSessions.owner || activeSessions.admin || activeSessions.staff || activeSessions.fullscreen;
+            if (!anySessionActive) return;
+
+            const inactiveMs = Date.now() - lastActivityAt;
+            if (inactiveMs >= timeoutHours * 60 * 60 * 1000) {
+                activeSessions.owner = null;
+                activeSessions.admin = null;
+                activeSessions.staff = null;
+                activeSessions.fullscreen = null;
+                lastActivityAt = Date.now();
+                renderAllScreens();
+                showToast("Sesión Cerrada por Inactividad 🔒", `No hubo actividad por ${timeoutHours} hora(s). Volvé a ingresar tu código para continuar.`, "warning");
+            }
+        }
 
         // Load Settings from Local/Supabase config
         async function loadSettings() {
             let stored = localStorage.getItem('agua_verde_settings');
             if (stored) {
-                systemSettings = JSON.parse(stored);
+                systemSettings = { ...systemSettings, ...JSON.parse(stored) };
             } else {
                 localStorage.setItem('agua_verde_settings', JSON.stringify(systemSettings));
             }
@@ -312,7 +344,7 @@
                 try {
                     const { data, error } = await supabaseClient.from('app_settings').select('val').eq('id', 'config').single();
                     if (data && data.val) {
-                        systemSettings = data.val;
+                        systemSettings = { ...systemSettings, ...data.val };
                         localStorage.setItem('agua_verde_settings', JSON.stringify(systemSettings));
                     }
                 } catch (e) {
@@ -462,7 +494,7 @@
             return { from: (table) => new FirestoreQueryBuilder(db, table) };
         }
 
-        function initSupabaseClient() {
+        async function initSupabaseClient() {
             // Configuración de tu proyecto Firebase (agua-verde)
             const firebaseConfig = {
                 apiKey: "AIzaSyCVRRBhyR6XydZSN6Sxn-Q2IMuZVPyzkVA",
@@ -479,7 +511,14 @@
 
             try {
                 const app = firebase.initializeApp(firebaseConfig);
+
+                // Nos autenticamos de forma anónima antes de tocar Firestore.
+                // Esto permite que las reglas de seguridad exijan "request.auth != null",
+                // en vez de dejar la base totalmente abierta a cualquiera con la config.
+                await firebase.auth().signInAnonymously();
+
                 const db = firebase.firestore();
+                firestoreDb = db;
                 supabaseClient = firestoreClientAdapter(db);
                 isLiveSupabase = true;
 
@@ -496,9 +535,14 @@
                 isLiveSupabase = false;
                 badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span> SIMULADOR LOCAL`;
                 badge.className = "bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 shrink-0 border border-amber-200";
-                bannerText.innerHTML = "No se pudo conectar a Firebase. Ejecutando en Modo Simulador Local.";
+                if (e && e.code === 'auth/operation-not-allowed') {
+                    bannerText.innerHTML = "Falta activar 'Anónimo' en Firebase Authentication → Sign-in method. Ejecutando en Modo Simulador Local mientras tanto.";
+                    showToast("Falta un paso en Firebase", "Activá el método de acceso 'Anónimo' en Authentication → Sign-in method.", "error");
+                } else {
+                    bannerText.innerHTML = "No se pudo conectar a Firebase. Ejecutando en Modo Simulador Local.";
+                    showToast("Error de Conexión", "No se pudo conectar a Firebase. Iniciando en Modo Demo.", "error");
+                }
                 if (fsBadge) fsBadge.innerHTML = "DEMO LOCAL";
-                showToast("Error de Conexión", "No se pudo conectar a Firebase. Iniciando en Modo Demo.", "error");
             }
         }
 
@@ -1240,6 +1284,34 @@
                 await fetchAndSyncFromSupabase();
             } else {
                 db.inventory_history = [];
+                saveMockDb(db);
+            }
+            return true;
+        }
+
+        // Devuelve los registros de auditoría más viejos que "cutoffDate" (sin borrar nada todavía)
+        function getOldHistoryRecords(cutoffDate) {
+            const db = getMockDb();
+            return db.inventory_history.filter(h => new Date(h.created_at) < cutoffDate);
+        }
+
+        // Borra específicamente esos registros viejos (se recomienda exportarlos antes)
+        async function db_deleteHistoryRecords(records) {
+            if (records.length === 0) return true;
+            const ids = new Set(records.map(r => r.id));
+            if (isLiveSupabase && firestoreDb) {
+                // Firestore permite hasta 500 operaciones por batch; los partimos en tandas
+                const idsArr = [...ids];
+                for (let i = 0; i < idsArr.length; i += 450) {
+                    const chunk = idsArr.slice(i, i + 450);
+                    const batch = firestoreDb.batch();
+                    chunk.forEach(id => batch.delete(firestoreDb.collection('inventory_history').doc(id)));
+                    await batch.commit();
+                }
+                await fetchAndSyncFromSupabase();
+            } else {
+                const db = getMockDb();
+                db.inventory_history = db.inventory_history.filter(h => !ids.has(h.id));
                 saveMockDb(db);
             }
             return true;
@@ -2615,6 +2687,7 @@
                         </div>
                         <div class="flex gap-1.5 shrink-0">
                             <button onclick="exportToExcel()" class="bg-emerald-800 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition">📥 Excel completo</button>
+                            <button onclick="archiveOldHistory()" class="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition">🗄️ Archivar +1 año</button>
                             <button onclick="clearHistoryLogs()" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition">🚨 Vaciar todo</button>
                         </div>
                     </div>
@@ -2805,6 +2878,12 @@
                                 <input type="number" id="config-large-adjust" value="${systemSettings.large_adjustment_threshold}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-700 font-semibold">
                                 <p class="text-[8px] text-slate-400 mt-1">Obliga a justificar con comentario si cambian este valor.</p>
                             </div>
+                        </div>
+
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Cerrar Sesión Automáticamente Tras (horas de inactividad)</label>
+                            <input type="number" id="config-session-timeout" min="0" step="0.5" value="${systemSettings.session_timeout_hours}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-700 font-semibold">
+                            <p class="text-[8px] text-slate-400 mt-1">Protege el sistema si alguien deja una sesión abierta en un celular o compu compartida. Poné 0 para desactivarlo.</p>
                         </div>
 
                         <button onclick="handleSaveAppSettings()" class="w-full bg-[#0d3a22] hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl shadow-md transition text-center block mt-3">
@@ -3694,12 +3773,45 @@
             }
         }
 
+        async function archiveOldHistory() {
+            const cutoff = new Date();
+            cutoff.setFullYear(cutoff.getFullYear() - 1);
+
+            const oldRecords = getOldHistoryRecords(cutoff);
+            if (oldRecords.length === 0) {
+                showToast("Nada para archivar", "No hay registros de auditoría con más de 1 año de antigüedad.", "info");
+                return;
+            }
+
+            if (!confirm(`Se descargará un Excel de respaldo con ${oldRecords.length} registro(s) de más de 1 año, y luego se borrarán del sistema (quedan solo en el Excel). ¿Continuar?`)) return;
+
+            const rows = oldRecords.map(h => ({
+                "Fecha y Hora": new Date(h.created_at).toLocaleString(),
+                "Sector": h.sector_name,
+                "Artículo": h.merchandise_name,
+                "Acción": h.action.toUpperCase(),
+                "Cantidad Antes": h.quantity_before !== null ? h.quantity_before : '--',
+                "Cantidad Después": h.quantity_after !== null ? h.quantity_after : '--',
+                "Detalle Completo": h.details,
+                "Código Operador": h.user_code,
+                "Nombre Operador": h.user_name
+            }));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Archivo Histórico");
+            XLSX.writeFile(wb, `Auditoria_Archivada_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+            await db_deleteHistoryRecords(oldRecords);
+            showToast("Historial Archivado 🗄️", `${oldRecords.length} registro(s) exportado(s) y removido(s) del sistema.`, "success");
+            renderAllScreens();
+        }
+
         async function handleSaveAppSettings() {
             const name = document.getElementById('config-app-name').value.trim();
             const low = parseFloat(document.getElementById('config-low-stock').value);
             const large = parseFloat(document.getElementById('config-large-adjust').value);
+            const sessionTimeout = parseFloat(document.getElementById('config-session-timeout').value);
 
-            if (!name || isNaN(low) || isNaN(large)) {
+            if (!name || isNaN(low) || isNaN(large) || isNaN(sessionTimeout) || sessionTimeout < 0) {
                 showToast("Datos Erróneos", "Verifica todos los campos de configuración.", "warning");
                 return;
             }
@@ -3707,7 +3819,8 @@
             const configObj = {
                 app_name: name,
                 low_stock_threshold: low,
-                large_adjustment_threshold: large
+                large_adjustment_threshold: large,
+                session_timeout_hours: sessionTimeout
             };
 
             await db_saveSettings(configObj);

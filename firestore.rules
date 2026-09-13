@@ -1,45 +1,49 @@
 rules_version = '2';
 
 // Reglas para Agua Verde.
-// Nota honesta: como la app valida el acceso con "códigos" (DUE12, ADM11, etc.)
-// en vez de usar el sistema de autenticación real de Firebase, no hay forma
-// de que Firestore sepa "quién sos" para bloquear por rol a nivel de servidor.
-// Esto da el mismo nivel de seguridad que tenías antes en Supabase con la
-// clave pública (anon key): cualquiera con el link de la app puede leer/escribir,
-// pero nadie puede hacerlo sin pasar por la pantalla de código de la app... salvo
-// que alguien copie tu configuración de Firebase y programe su propio cliente.
-// Si en el futuro querés blindarlo mejor (recomendado a mediano plazo), se puede
-// agregar autenticación anónima de Firebase + reglas por rol. Por ahora, prioriza
-// que la migración funcione igual que tu sistema actual sin romper nada.
+//
+// Ahora se exige que quien lea/escriba esté autenticado (aunque sea de forma
+// anónima, vía Firebase Authentication). Esto ya NO es tan abierto como antes:
+// alguien tendría que cargar tu app (o replicar el inicio de sesión anónimo)
+// para poder tocar la base, en vez de poder hacerlo con solo copiar la config.
+//
+// Sigue sin haber roles distintos a nivel de servidor (dueño vs admin vs
+// empleado): esa validación de rol sigue viviendo en la app, como con tu
+// sistema de códigos. Para bloquear por rol a nivel de servidor haría falta
+// Cloud Functions + custom claims, que es un paso más grande — avisame si en
+// algún momento te interesa dar ese salto.
+//
+// IMPORTANTE: para que esto funcione tenés que activar el método de acceso
+// "Anónimo" en Firebase: Authentication → Sign-in method → Anonymous → Habilitar.
 
 service cloud.firestore {
   match /databases/{database}/documents {
     match /sectors/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /access_codes/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /merchandise/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /inventory_history/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /app_settings/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /employees/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /employee_advances/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /employee_payments/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /employee_settlements/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
   }
 }
