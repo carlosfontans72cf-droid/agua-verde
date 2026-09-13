@@ -268,6 +268,12 @@
         let latestSyncRequest = 0;
         let realtimeSyncTimer = null;
 
+        // Estado del módulo de Empleados
+        let currentManagedEmployeeId = null;
+        let employeeModalTab = 'datos'; // datos | adelantos | pagos | liquidacion
+        let showInactiveEmployees = false;
+        let lastSettlementPreview = null;
+
         // ==========================================
         // APP INITIALIZATION
         // ==========================================
@@ -499,7 +505,7 @@
         // Live Database Realtime listeners (Firestore onSnapshot)
         function setupSupabaseRealtime(db) {
             if (!db) return;
-            const watchedTables = ['merchandise', 'inventory_history', 'access_codes', 'sectors'];
+            const watchedTables = ['merchandise', 'inventory_history', 'access_codes', 'sectors', 'employees', 'employee_advances', 'employee_payments', 'employee_settlements'];
             // Firestore dispara el callback DOS veces al conectar (una con datos de
             // caché local y otra con datos del servidor), aunque no haya cambios
             // reales. Ignoramos esas 2 primeras vueltas por colección para no
@@ -532,18 +538,22 @@
             const requestId = ++latestSyncRequest;
 
             try {
-                const [sectorsResult, codesResult, merchResult, historyResult] = await Promise.all([
+                const [sectorsResult, codesResult, merchResult, historyResult, employeesResult, advancesResult, paymentsResult, settlementsResult] = await Promise.all([
                     supabaseClient.from('sectors').select('*').order('name', { ascending: true }),
                     supabaseClient.from('access_codes').select('*'),
                     supabaseClient.from('merchandise').select('*'),
-                    supabaseClient.from('inventory_history').select('*').order('created_at', { ascending: false })
+                    supabaseClient.from('inventory_history').select('*').order('created_at', { ascending: false }),
+                    supabaseClient.from('employees').select('*').order('name', { ascending: true }),
+                    supabaseClient.from('employee_advances').select('*').order('date', { ascending: false }),
+                    supabaseClient.from('employee_payments').select('*').order('date', { ascending: false }),
+                    supabaseClient.from('employee_settlements').select('*').order('created_at', { ascending: false })
                 ]);
 
                 // Prevent an older, slower request from overwriting fresher data.
                 if (requestId !== latestSyncRequest) return false;
 
                 const current = getMockDb();
-                const results = [sectorsResult, codesResult, merchResult, historyResult];
+                const results = [sectorsResult, codesResult, merchResult, historyResult, employeesResult, advancesResult, paymentsResult, settlementsResult];
                 const errors = results.map(r => r.error).filter(Boolean);
                 errors.forEach(error => console.error('Error parcial de sincronización Supabase:', error));
 
@@ -551,7 +561,11 @@
                     sectors: sectorsResult.error ? current.sectors : (sectorsResult.data || []),
                     access_codes: codesResult.error ? current.access_codes : (codesResult.data || []),
                     merchandise: merchResult.error ? current.merchandise : (merchResult.data || []),
-                    inventory_history: historyResult.error ? current.inventory_history : (historyResult.data || [])
+                    inventory_history: historyResult.error ? current.inventory_history : (historyResult.data || []),
+                    employees: employeesResult.error ? current.employees : (employeesResult.data || []),
+                    employee_advances: advancesResult.error ? current.employee_advances : (advancesResult.data || []),
+                    employee_payments: paymentsResult.error ? current.employee_payments : (paymentsResult.data || []),
+                    employee_settlements: settlementsResult.error ? current.employee_settlements : (settlementsResult.data || [])
                 };
 
                 localStorage.setItem('agua_verde_db_pro', JSON.stringify(dbObj));
@@ -640,7 +654,8 @@
                     last_name: parts.slice(1).join(' '),
                     role: data.role,
                     sector_id: data.sector_id,
-                    can_view_all: data.can_view_all
+                    can_view_all: data.can_view_all,
+                    can_manage_employees: data.can_manage_employees === true
                 };
             }
 
@@ -659,7 +674,8 @@
                 last_name: parts.slice(1).join(' '),
                 role: found.role,
                 sector_id: found.sector_id,
-                can_view_all: found.can_view_all
+                can_view_all: found.can_view_all,
+                can_manage_employees: found.can_manage_employees === true
             };
         }
 
@@ -1400,6 +1416,804 @@
 
 
         // ==========================================
+        // MÓDULO DE EMPLEADOS
+        // ==========================================
+
+        // ¿Esta sesión puede entrar al módulo de Empleados?
+        // El dueño siempre puede. Un admin puede si el dueño le dio el permiso
+        // explícito (can_manage_employees) al crear/editar su código.
+        function canManageEmployees(userSession) {
+            if (!userSession) return false;
+            if (userSession.role === 'owner') return true;
+            return userSession.role === 'admin' && userSession.can_manage_employees === true;
+        }
+
+        function formatUYU(amount) {
+            const n = Number(amount) || 0;
+            return n.toLocaleString('es-UY', { style: 'currency', currency: 'UYU', maximumFractionDigits: 2 });
+        }
+
+        function employmentTypeLabel(type) {
+            if (type === 'zafral') return 'Zafral';
+            if (type === 'anual') return 'Anual / Mensual';
+            if (type === 'diario') return 'Por Día (Jornalero)';
+            return type || '-';
+        }
+
+        // --- ALTAS / CARGOS (empleados) ---
+        async function db_createEmployee(employee, userSession) {
+            if (!canManageEmployees(userSession)) {
+                showToast('Acceso denegado', 'No tenés permiso para gestionar Empleados.', 'error');
+                return false;
+            }
+            if (!employee.name || !employee.name.trim()) {
+                showToast('Falta el nombre', 'El nombre del empleado es obligatorio.', 'warning');
+                return false;
+            }
+            const row = {
+                id: crypto.randomUUID(),
+                name: employee.name.trim(),
+                document_id: (employee.document_id || '').trim(),
+                position: (employee.position || '').trim(),
+                employment_type: employee.employment_type || 'anual',
+                pay_rate: Number(employee.pay_rate) || 0,
+                start_date: employee.start_date || null,
+                end_date: null,
+                active: true,
+                notes: (employee.notes || '').trim(),
+                created_at: new Date().toISOString()
+            };
+
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient.from('employees').insert([row]);
+                if (error) { console.error(error); showToast('Error', 'No se pudo dar de alta al empleado.', 'error'); return false; }
+                await fetchAndSyncFromSupabase();
+            } else {
+                const db = getMockDb();
+                db.employees.push(row);
+                saveMockDb(db);
+            }
+            showToast('Alta registrada ✅', `${row.name} fue agregado/a como ${employmentTypeLabel(row.employment_type)}.`, 'success');
+            return true;
+        }
+
+        async function db_updateEmployee(employeeId, patch, userSession) {
+            if (!canManageEmployees(userSession)) {
+                showToast('Acceso denegado', 'No tenés permiso para gestionar Empleados.', 'error');
+                return false;
+            }
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient.from('employees').update(patch).eq('id', employeeId);
+                if (error) { console.error(error); showToast('Error', 'No se pudo guardar el cambio.', 'error'); return false; }
+                await fetchAndSyncFromSupabase();
+            } else {
+                const db = getMockDb();
+                const emp = db.employees.find(e => e.id === employeeId);
+                if (!emp) return false;
+                Object.assign(emp, patch);
+                saveMockDb(db);
+            }
+            showToast('Guardado ✅', 'Los datos del empleado se actualizaron.', 'success');
+            return true;
+        }
+
+        // Baja: no se borra el historial, se marca inactivo con fecha de egreso
+        async function db_deactivateEmployee(employeeId, endDate, userSession) {
+            return db_updateEmployee(employeeId, { active: false, end_date: endDate || new Date().toISOString().slice(0, 10) }, userSession);
+        }
+
+        async function db_reactivateEmployee(employeeId, userSession) {
+            return db_updateEmployee(employeeId, { active: true, end_date: null }, userSession);
+        }
+
+        // --- ADELANTOS ---
+        async function db_createAdvance(advance, userSession) {
+            if (!canManageEmployees(userSession)) {
+                showToast('Acceso denegado', 'No tenés permiso para gestionar Empleados.', 'error');
+                return false;
+            }
+            const amount = Number(advance.amount);
+            if (!advance.employee_id || !amount || amount <= 0) {
+                showToast('Datos inválidos', 'Elegí un empleado e ingresá un monto mayor a cero.', 'warning');
+                return false;
+            }
+            const row = {
+                id: crypto.randomUUID(),
+                employee_id: advance.employee_id,
+                amount: amount,
+                date: advance.date || new Date().toISOString().slice(0, 10),
+                note: (advance.note || '').trim(),
+                settled: false,
+                created_at: new Date().toISOString()
+            };
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient.from('employee_advances').insert([row]);
+                if (error) { console.error(error); showToast('Error', 'No se pudo registrar el adelanto.', 'error'); return false; }
+                await fetchAndSyncFromSupabase();
+            } else {
+                const db = getMockDb();
+                db.employee_advances.push(row);
+                saveMockDb(db);
+            }
+            showToast('Adelanto registrado 💵', formatUYU(amount) + ' guardado correctamente.', 'success');
+            return true;
+        }
+
+        async function db_deleteAdvance(advanceId, userSession) {
+            if (!canManageEmployees(userSession)) return false;
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('employee_advances').delete().eq('id', advanceId);
+                await fetchAndSyncFromSupabase();
+            } else {
+                const db = getMockDb();
+                db.employee_advances = db.employee_advances.filter(a => a.id !== advanceId);
+                saveMockDb(db);
+            }
+            return true;
+        }
+
+        // --- PAGOS (sueldos, jornales, zafra) ---
+        async function db_createPayment(payment, userSession) {
+            if (!canManageEmployees(userSession)) {
+                showToast('Acceso denegado', 'No tenés permiso para gestionar Empleados.', 'error');
+                return false;
+            }
+            const amount = Number(payment.amount);
+            if (!payment.employee_id || !amount || amount <= 0) {
+                showToast('Datos inválidos', 'Elegí un empleado e ingresá un monto mayor a cero.', 'warning');
+                return false;
+            }
+            const row = {
+                id: crypto.randomUUID(),
+                employee_id: payment.employee_id,
+                amount: amount,
+                date: payment.date || new Date().toISOString().slice(0, 10),
+                period_label: (payment.period_label || '').trim(),
+                type: payment.type || 'sueldo',
+                note: (payment.note || '').trim(),
+                created_at: new Date().toISOString()
+            };
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient.from('employee_payments').insert([row]);
+                if (error) { console.error(error); showToast('Error', 'No se pudo registrar el pago.', 'error'); return false; }
+                await fetchAndSyncFromSupabase();
+            } else {
+                const db = getMockDb();
+                db.employee_payments.push(row);
+                saveMockDb(db);
+            }
+            showToast('Pago registrado 💰', formatUYU(amount) + ' guardado correctamente.', 'success');
+            return true;
+        }
+
+        async function db_deletePayment(paymentId, userSession) {
+            if (!canManageEmployees(userSession)) return false;
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('employee_payments').delete().eq('id', paymentId);
+                await fetchAndSyncFromSupabase();
+            } else {
+                const db = getMockDb();
+                db.employee_payments = db.employee_payments.filter(p => p.id !== paymentId);
+                saveMockDb(db);
+            }
+            return true;
+        }
+
+        // --- LIQUIDACIONES ---
+        // Cálculo AUTOMÁTICO aproximado según legislación laboral de Uruguay.
+        // OJO: es una referencia práctica, no asesoramiento legal/contable.
+        // BPS, topes y franjas cambian; validar con un contador antes de pagar.
+        function calcularLiquidacionUY(params) {
+            const {
+                monthlySalaryRef,   // mejor sueldo mensual nominal de referencia
+                startDate,          // fecha de ingreso
+                endDate,            // fecha de egreso
+                settlementType,     // 'renuncia' | 'despido_comun' | 'fin_zafra' | 'fin_contrato'
+                mesesAguinaldoYaPagados // meses ya cubiertos por aguinaldo pagado (0-12)
+            } = params;
+
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            const msPerDay = 1000 * 60 * 60 * 24;
+            const diasTrabajadosTotal = Math.max(0, Math.round((end - start) / msPerDay));
+            const mesesTrabajadosTotal = diasTrabajadosTotal / 30;
+            const aniosCompletos = Math.floor(diasTrabajadosTotal / 365);
+
+            const sueldoDiario = monthlySalaryRef / 30;
+
+            // Aguinaldo proporcional: meses NO cubiertos aún, desde el último pago
+            const mesesPendientesAguinaldo = Math.max(0, Math.min(12, mesesTrabajadosTotal) - (mesesAguinaldoYaPagados || 0));
+            const aguinaldo = (monthlySalaryRef * mesesPendientesAguinaldo) / 12;
+
+            // Licencia no gozada: 20 días hábiles/año, proporcional a meses trabajados en el año en curso
+            const mesesParaLicencia = mesesTrabajadosTotal % 12 === 0 && mesesTrabajadosTotal > 0 ? 12 : (mesesTrabajadosTotal % 12);
+            const diasLicencia = Math.round((20 / 12) * mesesParaLicencia * 10) / 10;
+            const licenciaNoGozada = diasLicencia * sueldoDiario;
+
+            // Salario vacacional: aproximación simple = equivalente a los días de licencia
+            const salarioVacacional = diasLicencia * sueldoDiario;
+
+            // Indemnización por despido común: 1 mes por año trabajado o fracción, tope 6 meses.
+            // No corresponde en renuncia ni en fin de zafra/contrato pactado de antemano.
+            let indemnizacion = 0;
+            if (settlementType === 'despido_comun') {
+                const aniosParaIndemnizacion = Math.min(6, Math.ceil(diasTrabajadosTotal / 365));
+                indemnizacion = monthlySalaryRef * aniosParaIndemnizacion;
+            }
+
+            const subtotal = aguinaldo + licenciaNoGozada + salarioVacacional + indemnizacion;
+
+            return {
+                dias_trabajados_total: diasTrabajadosTotal,
+                anios_completos: aniosCompletos,
+                aguinaldo: Math.round(aguinaldo),
+                dias_licencia: diasLicencia,
+                licencia_no_gozada: Math.round(licenciaNoGozada),
+                salario_vacacional: Math.round(salarioVacacional),
+                indemnizacion: Math.round(indemnizacion),
+                subtotal: Math.round(subtotal)
+            };
+        }
+
+        async function db_createSettlement(settlement, userSession) {
+            if (!canManageEmployees(userSession)) {
+                showToast('Acceso denegado', 'No tenés permiso para gestionar Empleados.', 'error');
+                return false;
+            }
+            if (!settlement.employee_id) {
+                showToast('Falta el empleado', 'Elegí a qué empleado corresponde la liquidación.', 'warning');
+                return false;
+            }
+
+            const db = getMockDb();
+            const adelantosPendientes = db.employee_advances
+                .filter(a => a.employee_id === settlement.employee_id && !a.settled)
+                .reduce((sum, a) => sum + Number(a.amount), 0);
+
+            const row = {
+                id: crypto.randomUUID(),
+                employee_id: settlement.employee_id,
+                settlement_type: settlement.settlement_type,
+                calc_mode: settlement.calc_mode, // 'auto' | 'manual'
+                start_date: settlement.start_date,
+                end_date: settlement.end_date,
+                monthly_salary_ref: Number(settlement.monthly_salary_ref) || 0,
+                detail: settlement.detail || {},
+                adelantos_descontados: adelantosPendientes,
+                total: Math.max(0, Number(settlement.total) - adelantosPendientes),
+                total_bruto: Number(settlement.total),
+                notes: (settlement.notes || '').trim(),
+                created_at: new Date().toISOString()
+            };
+
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient.from('employee_settlements').insert([row]);
+                if (error) { console.error(error); showToast('Error', 'No se pudo guardar la liquidación.', 'error'); return false; }
+                // Marcamos los adelantos como saldados
+                const pendientes = db.employee_advances.filter(a => a.employee_id === settlement.employee_id && !a.settled);
+                for (const a of pendientes) {
+                    await supabaseClient.from('employee_advances').update({ settled: true }).eq('id', a.id);
+                }
+                await fetchAndSyncFromSupabase();
+            } else {
+                db.employee_settlements.push(row);
+                db.employee_advances.forEach(a => {
+                    if (a.employee_id === settlement.employee_id && !a.settled) a.settled = true;
+                });
+                saveMockDb(db);
+            }
+            showToast('Liquidación generada 📋', `Total a pagar: ${formatUYU(row.total)}`, 'success');
+            return true;
+        }
+
+        async function db_deleteSettlement(settlementId, userSession) {
+            if (!canManageEmployees(userSession)) return false;
+            if (isLiveSupabase && supabaseClient) {
+                await supabaseClient.from('employee_settlements').delete().eq('id', settlementId);
+                await fetchAndSyncFromSupabase();
+            } else {
+                const db = getMockDb();
+                db.employee_settlements = db.employee_settlements.filter(s => s.id !== settlementId);
+                saveMockDb(db);
+            }
+            return true;
+        }
+
+
+        // ==========================================
+        // MÓDULO DE EMPLEADOS — INTERFAZ
+        // ==========================================
+
+        function renderEmployeesTab(session, db) {
+            const activeEmployees = db.employees.filter(e => e.active);
+            const inactiveEmployees = db.employees.filter(e => !e.active);
+            const countByType = t => activeEmployees.filter(e => e.employment_type === t).length;
+
+            let html = `
+                <div class="grid grid-cols-4 gap-2.5 text-center select-none">
+                    <div class="bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl shadow-sm">
+                        <span class="text-[9px] uppercase font-bold text-emerald-800 block">Activos</span>
+                        <span class="text-base font-extrabold text-slate-800">${activeEmployees.length}</span>
+                    </div>
+                    <div class="bg-amber-50 border border-amber-100 p-2.5 rounded-xl shadow-sm">
+                        <span class="text-[9px] uppercase font-bold text-amber-800 block">Zafrales</span>
+                        <span class="text-base font-extrabold text-slate-800">${countByType('zafral')}</span>
+                    </div>
+                    <div class="bg-cyan-50 border border-cyan-100 p-2.5 rounded-xl shadow-sm">
+                        <span class="text-[9px] uppercase font-bold text-cyan-800 block">Anuales</span>
+                        <span class="text-base font-extrabold text-slate-800">${countByType('anual')}</span>
+                    </div>
+                    <div class="bg-slate-100 border border-slate-200 p-2.5 rounded-xl shadow-sm">
+                        <span class="text-[9px] uppercase font-bold text-slate-600 block">Por Día</span>
+                        <span class="text-base font-extrabold text-slate-800">${countByType('diario')}</span>
+                    </div>
+                </div>
+
+                <button onclick="openAddEmployeeModal()" class="w-full bg-[#0d3a22] hover:bg-emerald-800 text-white font-bold text-xs py-3 rounded-xl shadow-md transition">
+                    ➕ Nueva Alta de Empleado
+                </button>
+
+                <div class="space-y-2">
+            `;
+
+            if (activeEmployees.length === 0) {
+                html += `<p class="text-center text-slate-400 text-xs py-6">Todavía no cargaste empleados activos.</p>`;
+            }
+
+            activeEmployees.forEach(emp => {
+                html += renderEmployeeCard(emp, db);
+            });
+
+            html += `</div>`;
+
+            if (inactiveEmployees.length > 0) {
+                html += `
+                    <button onclick="showInactiveEmployees = !showInactiveEmployees; renderAllScreens();" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 pt-2">
+                        ${showInactiveEmployees ? '▲ Ocultar' : '▼ Ver'} bajas (${inactiveEmployees.length})
+                    </button>
+                `;
+                if (showInactiveEmployees) {
+                    html += `<div class="space-y-2 opacity-70">`;
+                    inactiveEmployees.forEach(emp => { html += renderEmployeeCard(emp, db); });
+                    html += `</div>`;
+                }
+            }
+
+            return html;
+        }
+
+        function renderEmployeeCard(emp, db) {
+            const adelantosPendientes = db.employee_advances
+                .filter(a => a.employee_id === emp.id && !a.settled)
+                .reduce((s, a) => s + Number(a.amount), 0);
+
+            return `
+                <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-2">
+                    <div class="min-w-0">
+                        <p class="font-extrabold text-sm text-slate-800 truncate">${escapeHtml(emp.name)}</p>
+                        <p class="text-[10px] text-slate-500 truncate">${escapeHtml(emp.position || 'Sin cargo asignado')} · ${employmentTypeLabel(emp.employment_type)}</p>
+                        ${adelantosPendientes > 0 ? `<p class="text-[10px] text-amber-600 font-bold mt-0.5">Adelantos pendientes: ${formatUYU(adelantosPendientes)}</p>` : ''}
+                        ${!emp.active ? `<p class="text-[9px] text-red-500 font-bold mt-0.5">BAJA: ${emp.end_date || '-'}</p>` : ''}
+                    </div>
+                    <div class="flex gap-1.5 shrink-0">
+                        <button onclick="openEmployeeManageModal('${emp.id}')" class="bg-slate-800 hover:bg-slate-950 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-bold">📋 Gestionar</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function openAddEmployeeModal() {
+            const modal = document.createElement('div');
+            modal.className = "fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+            modal.id = "dynamic-modal";
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-200 max-h-[90vh] flex flex-col">
+                    <div class="bg-slate-900 text-white p-4 font-bold flex justify-between items-center">
+                        <h4 class="text-sm font-serif">👷 Nueva Alta de Empleado</h4>
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="text-white hover:text-red-300 font-bold text-lg leading-none">&times;</button>
+                    </div>
+                    <div class="p-4 space-y-3 text-xs overflow-y-auto">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre Completo</label>
+                            <input type="text" id="emp-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Cédula (opcional)</label>
+                            <input type="text" id="emp-doc" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Cargo</label>
+                            <input type="text" id="emp-position" placeholder="Ej: Repartidor, Cocinero..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Tipo de Empleado</label>
+                            <select id="emp-type" onchange="updateEmpRateLabel()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                                <option value="anual">Anual / Mensual</option>
+                                <option value="zafral">Zafral</option>
+                                <option value="diario">Por Día (Jornalero)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label id="emp-rate-label" class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Sueldo Mensual ($)</label>
+                            <input type="number" id="emp-rate" min="0" step="1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Fecha de Ingreso</label>
+                            <input type="date" id="emp-start" value="${new Date().toISOString().slice(0,10)}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Notas (opcional)</label>
+                            <textarea id="emp-notes" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none"></textarea>
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-2 text-xs font-bold shrink-0">
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl">Cancelar</button>
+                        <button id="btn-submit-add-employee" class="bg-slate-950 text-white hover:bg-slate-800 px-3.5 py-2 rounded-xl shadow">Dar de Alta ✅</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById('btn-submit-add-employee').onclick = async () => {
+                const ok = await db_createEmployee({
+                    name: document.getElementById('emp-name').value,
+                    document_id: document.getElementById('emp-doc').value,
+                    position: document.getElementById('emp-position').value,
+                    employment_type: document.getElementById('emp-type').value,
+                    pay_rate: document.getElementById('emp-rate').value,
+                    start_date: document.getElementById('emp-start').value,
+                    notes: document.getElementById('emp-notes').value
+                }, getCurrentOwnerOrAdminSession());
+                if (ok) {
+                    document.getElementById('dynamic-modal').remove();
+                    if (!isLiveSupabase) renderAllScreens();
+                }
+            };
+        }
+
+        function updateEmpRateLabel() {
+            const type = document.getElementById('emp-type').value;
+            const label = document.getElementById('emp-rate-label');
+            if (!label) return;
+            if (type === 'diario') label.textContent = 'Jornal Diario ($)';
+            else if (type === 'zafral') label.textContent = 'Monto Acordado por Zafra / Jornal ($)';
+            else label.textContent = 'Sueldo Mensual ($)';
+        }
+
+        // Devuelve la sesión activa que esté gestionando Empleados (dueño o admin autorizado)
+        function getCurrentOwnerOrAdminSession() {
+            if (activeSessions.owner) return activeSessions.owner;
+            if (activeSessions.admin && canManageEmployees(activeSessions.admin)) return activeSessions.admin;
+            if (activeSessions.fullscreen && canManageEmployees(activeSessions.fullscreen)) return activeSessions.fullscreen;
+            return null;
+        }
+
+        function openEmployeeManageModal(employeeId) {
+            currentManagedEmployeeId = employeeId;
+            employeeModalTab = 'datos';
+            renderEmployeeManageModal();
+        }
+
+        function switchEmployeeModalTab(tabName) {
+            employeeModalTab = tabName;
+            lastSettlementPreview = null;
+            renderEmployeeManageModal();
+        }
+
+        function renderEmployeeManageModal() {
+            const db = getMockDb();
+            const emp = db.employees.find(e => e.id === currentManagedEmployeeId);
+            let existing = document.getElementById('dynamic-modal');
+            if (!existing) {
+                existing = document.createElement('div');
+                existing.id = 'dynamic-modal';
+                existing.className = "fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+                document.body.appendChild(existing);
+            }
+            if (!emp) { existing.remove(); return; }
+
+            const tabs = [
+                { id: 'datos', label: '👤 Datos' },
+                { id: 'adelantos', label: '💵 Adelantos' },
+                { id: 'pagos', label: '💰 Pagos' },
+                { id: 'liquidacion', label: '📋 Liquidación' }
+            ];
+
+            existing.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 max-h-[92vh] flex flex-col">
+                    <div class="bg-slate-900 text-white p-4 font-bold flex justify-between items-center shrink-0">
+                        <div>
+                            <h4 class="text-sm font-serif">${escapeHtml(emp.name)}</h4>
+                            <p class="text-[9px] text-slate-300 font-normal">${escapeHtml(emp.position || 'Sin cargo')} · ${employmentTypeLabel(emp.employment_type)}</p>
+                        </div>
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="text-white hover:text-red-300 font-bold text-lg leading-none">&times;</button>
+                    </div>
+                    <div class="bg-slate-50 border-b border-slate-200 px-3 flex gap-3 text-[10px] font-bold overflow-x-auto whitespace-nowrap shrink-0">
+                        ${tabs.map(t => `
+                            <button onclick="switchEmployeeModalTab('${t.id}')" class="py-2.5 ${employeeModalTab === t.id ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500'}">${t.label}</button>
+                        `).join('')}
+                    </div>
+                    <div id="employee-modal-body" class="p-4 overflow-y-auto text-xs space-y-3">
+                        ${renderEmployeeModalTabBody(emp, db)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderEmployeeModalTabBody(emp, db) {
+            if (employeeModalTab === 'datos') return renderEmpTabDatos(emp);
+            if (employeeModalTab === 'adelantos') return renderEmpTabAdelantos(emp, db);
+            if (employeeModalTab === 'pagos') return renderEmpTabPagos(emp, db);
+            if (employeeModalTab === 'liquidacion') return renderEmpTabLiquidacion(emp, db);
+            return '';
+        }
+
+        function renderEmpTabDatos(emp) {
+            return `
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Nombre Completo</label>
+                    <input type="text" id="edit-emp-name" value="${escapeHtml(emp.name)}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none font-bold">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Cédula</label>
+                    <input type="text" id="edit-emp-doc" value="${escapeHtml(emp.document_id || '')}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Cargo</label>
+                    <input type="text" id="edit-emp-position" value="${escapeHtml(emp.position || '')}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Tipo de Empleado</label>
+                    <select id="edit-emp-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                        <option value="anual" ${emp.employment_type === 'anual' ? 'selected' : ''}>Anual / Mensual</option>
+                        <option value="zafral" ${emp.employment_type === 'zafral' ? 'selected' : ''}>Zafral</option>
+                        <option value="diario" ${emp.employment_type === 'diario' ? 'selected' : ''}>Por Día (Jornalero)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Monto de Referencia ($)</label>
+                    <input type="number" id="edit-emp-rate" value="${emp.pay_rate || 0}" min="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Fecha de Ingreso</label>
+                    <input type="date" id="edit-emp-start" value="${emp.start_date || ''}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Notas</label>
+                    <textarea id="edit-emp-notes" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">${escapeHtml(emp.notes || '')}</textarea>
+                </div>
+                <button onclick="submitEditEmployeeDatos('${emp.id}')" class="w-full bg-slate-950 text-white font-bold py-2.5 rounded-xl">💾 Guardar Cambios</button>
+                <hr class="border-slate-100">
+                ${emp.active
+                    ? `<button onclick="submitDeactivateEmployee('${emp.id}')" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl">🔴 Dar de Baja</button>`
+                    : `<button onclick="submitReactivateEmployee('${emp.id}')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl">🟢 Reactivar</button>`
+                }
+            `;
+        }
+
+        async function submitEditEmployeeDatos(employeeId) {
+            const ok = await db_updateEmployee(employeeId, {
+                name: document.getElementById('edit-emp-name').value.trim(),
+                document_id: document.getElementById('edit-emp-doc').value.trim(),
+                position: document.getElementById('edit-emp-position').value.trim(),
+                employment_type: document.getElementById('edit-emp-type').value,
+                pay_rate: Number(document.getElementById('edit-emp-rate').value) || 0,
+                start_date: document.getElementById('edit-emp-start').value,
+                notes: document.getElementById('edit-emp-notes').value.trim()
+            }, getCurrentOwnerOrAdminSession());
+            if (ok && !isLiveSupabase) renderEmployeeManageModal();
+            if (ok) renderAllScreens();
+        }
+
+        async function submitDeactivateEmployee(employeeId) {
+            const ok = await db_deactivateEmployee(employeeId, new Date().toISOString().slice(0,10), getCurrentOwnerOrAdminSession());
+            if (ok) { renderEmployeeManageModal(); renderAllScreens(); }
+        }
+        async function submitReactivateEmployee(employeeId) {
+            const ok = await db_reactivateEmployee(employeeId, getCurrentOwnerOrAdminSession());
+            if (ok) { renderEmployeeManageModal(); renderAllScreens(); }
+        }
+
+        function renderEmpTabAdelantos(emp, db) {
+            const advances = db.employee_advances.filter(a => a.employee_id === emp.id).sort((a,b) => new Date(b.date) - new Date(a.date));
+            const pendiente = advances.filter(a => !a.settled).reduce((s,a) => s + Number(a.amount), 0);
+            return `
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-center">
+                    <span class="text-[9px] uppercase font-bold text-amber-800 block">Total Pendiente (sin liquidar)</span>
+                    <span class="text-lg font-extrabold text-amber-900">${formatUYU(pendiente)}</span>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                    <p class="text-[10px] font-bold uppercase text-slate-500">Nuevo Adelanto</p>
+                    <input type="number" id="adv-amount" placeholder="Monto ($)" min="0" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <input type="date" id="adv-date" value="${new Date().toISOString().slice(0,10)}" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <input type="text" id="adv-note" placeholder="Motivo (opcional)" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <button onclick="submitNewAdvance('${emp.id}')" class="w-full bg-slate-950 text-white font-bold py-2 rounded-lg">➕ Agregar Adelanto</button>
+                </div>
+                <div class="space-y-1.5">
+                    ${advances.length === 0 ? '<p class="text-center text-slate-400 py-3">Sin adelantos registrados.</p>' : advances.map(a => `
+                        <div class="flex justify-between items-center bg-white border border-slate-200 rounded-lg px-3 py-2">
+                            <div>
+                                <p class="font-bold text-slate-800">${formatUYU(a.amount)} ${a.settled ? '<span class=\"text-[9px] text-emerald-600 font-bold\">(liquidado)</span>' : ''}</p>
+                                <p class="text-[9px] text-slate-400">${a.date} ${a.note ? '· ' + escapeHtml(a.note) : ''}</p>
+                            </div>
+                            ${!a.settled ? `<button onclick="submitDeleteAdvance('${a.id}')" class="text-red-500 hover:text-red-700 font-bold text-[10px]">🗑️</button>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function submitNewAdvance(employeeId) {
+            const ok = await db_createAdvance({
+                employee_id: employeeId,
+                amount: document.getElementById('adv-amount').value,
+                date: document.getElementById('adv-date').value,
+                note: document.getElementById('adv-note').value
+            }, getCurrentOwnerOrAdminSession());
+            if (ok) { renderEmployeeManageModal(); renderAllScreens(); }
+        }
+        async function submitDeleteAdvance(advanceId) {
+            await db_deleteAdvance(advanceId, getCurrentOwnerOrAdminSession());
+            renderEmployeeManageModal(); renderAllScreens();
+        }
+
+        function renderEmpTabPagos(emp, db) {
+            const payments = db.employee_payments.filter(p => p.employee_id === emp.id).sort((a,b) => new Date(b.date) - new Date(a.date));
+            return `
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                    <p class="text-[10px] font-bold uppercase text-slate-500">Nuevo Pago</p>
+                    <input type="number" id="pay-amount" placeholder="Monto ($)" min="0" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <input type="date" id="pay-date" value="${new Date().toISOString().slice(0,10)}" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <input type="text" id="pay-period" placeholder="Período (Ej: Junio 2026, Semana 1...)" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <select id="pay-type" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                        <option value="sueldo">Sueldo Mensual</option>
+                        <option value="jornal">Jornal Diario</option>
+                        <option value="zafra">Pago de Zafra</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                    <input type="text" id="pay-note" placeholder="Nota (opcional)" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <button onclick="submitNewPayment('${emp.id}')" class="w-full bg-slate-950 text-white font-bold py-2 rounded-lg">➕ Registrar Pago</button>
+                </div>
+                <div class="space-y-1.5">
+                    ${payments.length === 0 ? '<p class="text-center text-slate-400 py-3">Sin pagos registrados.</p>' : payments.map(p => `
+                        <div class="flex justify-between items-center bg-white border border-slate-200 rounded-lg px-3 py-2">
+                            <div>
+                                <p class="font-bold text-slate-800">${formatUYU(p.amount)} <span class="text-[9px] text-slate-400 font-normal">(${p.type})</span></p>
+                                <p class="text-[9px] text-slate-400">${p.date} ${p.period_label ? '· ' + escapeHtml(p.period_label) : ''}</p>
+                            </div>
+                            <button onclick="submitDeletePayment('${p.id}')" class="text-red-500 hover:text-red-700 font-bold text-[10px]">🗑️</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function submitNewPayment(employeeId) {
+            const ok = await db_createPayment({
+                employee_id: employeeId,
+                amount: document.getElementById('pay-amount').value,
+                date: document.getElementById('pay-date').value,
+                period_label: document.getElementById('pay-period').value,
+                type: document.getElementById('pay-type').value,
+                note: document.getElementById('pay-note').value
+            }, getCurrentOwnerOrAdminSession());
+            if (ok) { renderEmployeeManageModal(); renderAllScreens(); }
+        }
+        async function submitDeletePayment(paymentId) {
+            await db_deletePayment(paymentId, getCurrentOwnerOrAdminSession());
+            renderEmployeeManageModal(); renderAllScreens();
+        }
+
+        function renderEmpTabLiquidacion(emp, db) {
+            const pastSettlements = db.employee_settlements.filter(s => s.employee_id === emp.id).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+            const adelantosPendientes = db.employee_advances.filter(a => a.employee_id === emp.id && !a.settled).reduce((s,a) => s + Number(a.amount), 0);
+
+            let previewHtml = '';
+            if (lastSettlementPreview) {
+                const p = lastSettlementPreview;
+                previewHtml = `
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-1">
+                        <p class="text-[10px] font-bold uppercase text-emerald-800">Resultado del Cálculo</p>
+                        <div class="flex justify-between"><span>Aguinaldo proporcional</span><span class="font-bold">${formatUYU(p.aguinaldo)}</span></div>
+                        <div class="flex justify-between"><span>Licencia no gozada (${p.dias_licencia} días)</span><span class="font-bold">${formatUYU(p.licencia_no_gozada)}</span></div>
+                        <div class="flex justify-between"><span>Salario vacacional</span><span class="font-bold">${formatUYU(p.salario_vacacional)}</span></div>
+                        ${p.indemnizacion > 0 ? `<div class="flex justify-between"><span>Indemnización por despido</span><span class="font-bold">${formatUYU(p.indemnizacion)}</span></div>` : ''}
+                        <hr class="border-emerald-200">
+                        <div class="flex justify-between text-sm"><span class="font-bold">Subtotal</span><span class="font-extrabold">${formatUYU(p.subtotal)}</span></div>
+                        <div class="flex justify-between text-red-700"><span>(-) Adelantos pendientes</span><span class="font-bold">-${formatUYU(adelantosPendientes)}</span></div>
+                        <div class="flex justify-between text-base pt-1 border-t border-emerald-300"><span class="font-extrabold">TOTAL A PAGAR</span><span class="font-extrabold">${formatUYU(Math.max(0, p.subtotal - adelantosPendientes))}</span></div>
+                    </div>
+                    <button onclick="submitSaveSettlement('${emp.id}', ${p.subtotal})" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl">💾 Guardar esta Liquidación</button>
+                `;
+            }
+
+            return `
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                    <p class="text-[10px] font-bold uppercase text-slate-500">Calcular Liquidación</p>
+                    <label class="text-[9px] font-bold text-slate-500">Motivo</label>
+                    <select id="liq-type" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                        <option value="renuncia">Renuncia</option>
+                        <option value="despido_comun">Despido Común</option>
+                        <option value="fin_zafra">Fin de Zafra</option>
+                        <option value="fin_contrato">Fin de Contrato</option>
+                    </select>
+                    <label class="text-[9px] font-bold text-slate-500">Fecha de Ingreso</label>
+                    <input type="date" id="liq-start" value="${emp.start_date || ''}" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <label class="text-[9px] font-bold text-slate-500">Fecha de Egreso</label>
+                    <input type="date" id="liq-end" value="${new Date().toISOString().slice(0,10)}" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <label class="text-[9px] font-bold text-slate-500">Mejor Sueldo Mensual de Referencia ($)</label>
+                    <input type="number" id="liq-salary" value="${emp.employment_type === 'anual' ? (emp.pay_rate || 0) : ''}" min="0" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <label class="text-[9px] font-bold text-slate-500">Meses de Aguinaldo ya pagados en el período (0 a 12)</label>
+                    <input type="number" id="liq-aguinaldo-pagado" value="0" min="0" max="12" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none">
+                    <button onclick="submitCalcSettlement('${emp.id}')" class="w-full bg-slate-800 hover:bg-slate-950 text-white font-bold py-2.5 rounded-xl">🧮 Calcular (Automático UY)</button>
+                    <p class="text-[9px] text-slate-400 text-center pt-1">Aproximación práctica, no es asesoramiento legal. Validá con tu contador antes de pagar.</p>
+                </div>
+
+                ${previewHtml}
+
+                <div class="pt-1">
+                    <p class="text-[10px] font-bold uppercase text-slate-500 mb-1.5">Liquidaciones Anteriores</p>
+                    ${pastSettlements.length === 0 ? '<p class="text-center text-slate-400 py-2">Sin liquidaciones registradas.</p>' : pastSettlements.map(s => `
+                        <div class="flex justify-between items-center bg-white border border-slate-200 rounded-lg px-3 py-2 mb-1.5">
+                            <div>
+                                <p class="font-bold text-slate-800">${formatUYU(s.total)} <span class="text-[9px] text-slate-400 font-normal">(${s.settlement_type})</span></p>
+                                <p class="text-[9px] text-slate-400">${new Date(s.created_at).toLocaleDateString()} · Bruto: ${formatUYU(s.total_bruto)} · Adelantos: -${formatUYU(s.adelantos_descontados)}</p>
+                            </div>
+                            <button onclick="submitDeleteSettlement('${s.id}', '${emp.id}')" class="text-red-500 hover:text-red-700 font-bold text-[10px]">🗑️</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function submitCalcSettlement(employeeId) {
+            const salaryRef = Number(document.getElementById('liq-salary').value) || 0;
+            if (salaryRef <= 0) {
+                showToast('Falta el sueldo de referencia', 'Ingresá el mejor sueldo mensual para poder calcular.', 'warning');
+                return;
+            }
+            lastSettlementPreview = calcularLiquidacionUY({
+                monthlySalaryRef: salaryRef,
+                startDate: document.getElementById('liq-start').value,
+                endDate: document.getElementById('liq-end').value,
+                settlementType: document.getElementById('liq-type').value,
+                mesesAguinaldoYaPagados: Number(document.getElementById('liq-aguinaldo-pagado').value) || 0
+            });
+            lastSettlementPreview._meta = {
+                settlement_type: document.getElementById('liq-type').value,
+                start_date: document.getElementById('liq-start').value,
+                end_date: document.getElementById('liq-end').value,
+                monthly_salary_ref: salaryRef
+            };
+            renderEmployeeManageModal();
+        }
+
+        async function submitSaveSettlement(employeeId, totalBruto) {
+            const meta = lastSettlementPreview._meta;
+            const ok = await db_createSettlement({
+                employee_id: employeeId,
+                settlement_type: meta.settlement_type,
+                calc_mode: 'auto',
+                start_date: meta.start_date,
+                end_date: meta.end_date,
+                monthly_salary_ref: meta.monthly_salary_ref,
+                detail: lastSettlementPreview,
+                total: totalBruto
+            }, getCurrentOwnerOrAdminSession());
+            if (ok) {
+                lastSettlementPreview = null;
+                renderEmployeeManageModal();
+                renderAllScreens();
+            }
+        }
+
+        async function submitDeleteSettlement(settlementId, employeeId) {
+            await db_deleteSettlement(settlementId, getCurrentOwnerOrAdminSession());
+            renderEmployeeManageModal(); renderAllScreens();
+        }
+
+
+        // ==========================================
         // SCREEN RENDERERS
         // ==========================================
 
@@ -1448,6 +2262,9 @@
                     <button onclick="setTab('owner', 'sectors')" class="py-2.5 ${tab === 'sectors' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
                         🛖 Sectores
                     </button>
+                    <button onclick="setTab('owner', 'employees')" class="py-2.5 ${tab === 'employees' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
+                        👷 Empleados
+                    </button>
                     <button onclick="setTab('owner', 'config')" class="py-2.5 ${tab === 'config' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
                         ⚙️ Configuración No-Code
                     </button>
@@ -1455,6 +2272,10 @@
 
                 <div class="p-4 flex-grow space-y-4 overflow-y-auto">
             `;
+
+            if (tab === 'employees') {
+                html += renderEmployeesTab(session, db);
+            }
 
             if (tab === 'inventory') {
                 html += `
@@ -1854,10 +2675,19 @@
                     <button onclick="setTab('admin', 'codes')" class="flex-grow py-2.5 ${tab === 'codes' ? 'bg-white border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500'}">
                         🔑 Claves (${myCodes.length})
                     </button>
+                    ${canManageEmployees(session) ? `
+                    <button onclick="setTab('admin', 'employees')" class="flex-grow py-2.5 ${tab === 'employees' ? 'bg-white border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500'}">
+                        👷 Empleados
+                    </button>
+                    ` : ''}
                 </div>
 
                 <div class="p-3 flex-grow space-y-3 overflow-y-auto">
             `;
+
+            if (tab === 'employees' && canManageEmployees(session)) {
+                html += renderEmployeesTab(session, db);
+            }
 
             if (tab === 'inventory') {
                 html += `
