@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// Reglas de Cloud Storage para las fotos de boletas de Agua Verde.
+// Mismo criterio que firestore.rules: se exige estar autenticado (aunque sea
+// de forma anónima), y se limita el tamaño de cada foto a 10 MB para evitar
+// que alguien suba archivos gigantes por error (o a propósito) y dispare el
+// consumo de Storage.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /recibos/{allPaths=**} {
+      allow read, write: if request.auth != null
+                          && request.resource.size < 10 * 1024 * 1024
+                          && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

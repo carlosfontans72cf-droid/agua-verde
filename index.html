@@ -12,6 +12,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <!-- SheetJS CDN (Pure client-side Excel exporting with sheets, styles, and full format) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
@@ -183,6 +184,7 @@
         let isLiveSupabase = false;
         let supabaseClient = null;
         let firestoreDb = null; // referencia directa a Firestore, para operaciones masivas (archivado, etc.)
+        let firebaseStorage = null; // referencia a Cloud Storage, para fotos de boletas
 
         // Custom config settings state (modifiable dynamically by owner)
         let systemSettings = {
@@ -225,7 +227,8 @@
             employees: [],
             employee_advances: [],
             employee_payments: [],
-            employee_settlements: []
+            employee_settlements: [],
+            accounting_receipts: []
         };
 
         function getMockDb() {
@@ -240,6 +243,7 @@
             if (!parsed.employee_advances) parsed.employee_advances = [];
             if (!parsed.employee_payments) parsed.employee_payments = [];
             if (!parsed.employee_settlements) parsed.employee_settlements = [];
+            if (!parsed.accounting_receipts) parsed.accounting_receipts = [];
             return parsed;
         }
 
@@ -276,6 +280,12 @@
         let employeeModalTab = 'datos'; // datos | adelantos | pagos | liquidacion
         let showInactiveEmployees = false;
         let lastSettlementPreview = null;
+
+        // Estado del módulo de Contabilidad
+        let accountingViewMode = 'provider'; // 'provider' | 'sector'
+        let accountingMonthFilter = null; // 'YYYY-MM' o null (todo el historial)
+        let expandedAccountingGroups = new Set(); // ids de grupos expandidos en pantalla
+        let receiptUploadPreviewFile = null; // File elegido en el modal, pendiente de confirmar
 
         // ==========================================
         // APP INITIALIZATION
@@ -522,6 +532,13 @@
                 supabaseClient = firestoreClientAdapter(db);
                 isLiveSupabase = true;
 
+                try {
+                    firebaseStorage = firebase.storage();
+                } catch (storageErr) {
+                    console.error("Cloud Storage no disponible (¿activaste el plan Blaze y Storage en la consola?):", storageErr);
+                    firebaseStorage = null;
+                }
+
                 badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span> CONECTADO A FIREBASE`;
                 badge.className = "bg-emerald-950 text-emerald-200 px-3 py-1 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 shrink-0 border border-emerald-800";
                 bannerText.innerHTML = "Tu aplicación está conectada a tu Base de Datos en la nube de Firebase.";
@@ -549,7 +566,7 @@
         // Live Database Realtime listeners (Firestore onSnapshot)
         function setupSupabaseRealtime(db) {
             if (!db) return;
-            const watchedTables = ['merchandise', 'inventory_history', 'access_codes', 'sectors', 'employees', 'employee_advances', 'employee_payments', 'employee_settlements'];
+            const watchedTables = ['merchandise', 'inventory_history', 'access_codes', 'sectors', 'employees', 'employee_advances', 'employee_payments', 'employee_settlements', 'accounting_receipts'];
             // Firestore dispara el callback DOS veces al conectar (una con datos de
             // caché local y otra con datos del servidor), aunque no haya cambios
             // reales. Ignoramos esas 2 primeras vueltas por colección para no
@@ -582,7 +599,7 @@
             const requestId = ++latestSyncRequest;
 
             try {
-                const [sectorsResult, codesResult, merchResult, historyResult, employeesResult, advancesResult, paymentsResult, settlementsResult] = await Promise.all([
+                const [sectorsResult, codesResult, merchResult, historyResult, employeesResult, advancesResult, paymentsResult, settlementsResult, receiptsResult] = await Promise.all([
                     supabaseClient.from('sectors').select('*').order('name', { ascending: true }),
                     supabaseClient.from('access_codes').select('*'),
                     supabaseClient.from('merchandise').select('*'),
@@ -590,14 +607,15 @@
                     supabaseClient.from('employees').select('*').order('name', { ascending: true }),
                     supabaseClient.from('employee_advances').select('*').order('date', { ascending: false }),
                     supabaseClient.from('employee_payments').select('*').order('date', { ascending: false }),
-                    supabaseClient.from('employee_settlements').select('*').order('created_at', { ascending: false })
+                    supabaseClient.from('employee_settlements').select('*').order('created_at', { ascending: false }),
+                    supabaseClient.from('accounting_receipts').select('*').order('created_at', { ascending: false })
                 ]);
 
                 // Prevent an older, slower request from overwriting fresher data.
                 if (requestId !== latestSyncRequest) return false;
 
                 const current = getMockDb();
-                const results = [sectorsResult, codesResult, merchResult, historyResult, employeesResult, advancesResult, paymentsResult, settlementsResult];
+                const results = [sectorsResult, codesResult, merchResult, historyResult, employeesResult, advancesResult, paymentsResult, settlementsResult, receiptsResult];
                 const errors = results.map(r => r.error).filter(Boolean);
                 errors.forEach(error => console.error('Error parcial de sincronización Supabase:', error));
 
@@ -609,7 +627,8 @@
                     employees: employeesResult.error ? current.employees : (employeesResult.data || []),
                     employee_advances: advancesResult.error ? current.employee_advances : (advancesResult.data || []),
                     employee_payments: paymentsResult.error ? current.employee_payments : (paymentsResult.data || []),
-                    employee_settlements: settlementsResult.error ? current.employee_settlements : (settlementsResult.data || [])
+                    employee_settlements: settlementsResult.error ? current.employee_settlements : (settlementsResult.data || []),
+                    accounting_receipts: receiptsResult.error ? current.accounting_receipts : (receiptsResult.data || [])
                 };
 
                 localStorage.setItem('agua_verde_db_pro', JSON.stringify(dbObj));
@@ -1851,6 +1870,472 @@
 
 
         // ==========================================
+        // MÓDULO DE CONTABILIDAD (boletas de proveedores)
+        // ==========================================
+
+        // ¿Esta sesión puede cargar/gestionar boletas? Dueño y cualquier admin.
+        function canManageAccounting(userSession) {
+            if (!userSession) return false;
+            return userSession.role === 'owner' || userSession.role === 'admin';
+        }
+
+        function getCurrentAccountingSession() {
+            if (activeSessions.owner) return activeSessions.owner;
+            if (activeSessions.admin && canManageAccounting(activeSessions.admin)) return activeSessions.admin;
+            if (activeSessions.fullscreen && canManageAccounting(activeSessions.fullscreen)) return activeSessions.fullscreen;
+            return null;
+        }
+
+        // Redimensiona/comprime la foto en el navegador antes de subirla, para
+        // no gastar de más en Storage ni hacer esperar a alguien con poca señal.
+        // Máximo 1600px de lado más largo, JPEG calidad 0.8.
+        function compressReceiptImage(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const reader = new FileReader();
+                reader.onload = (e) => { img.src = e.target.result; };
+                reader.onerror = reject;
+                img.onload = () => {
+                    const MAX_SIDE = 1600;
+                    let { width, height } = img;
+                    if (width > height && width > MAX_SIDE) {
+                        height = Math.round(height * (MAX_SIDE / width));
+                        width = MAX_SIDE;
+                    } else if (height > MAX_SIDE) {
+                        width = Math.round(width * (MAX_SIDE / height));
+                        height = MAX_SIDE;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => {
+                        if (blob) resolve(blob);
+                        else reject(new Error('No se pudo procesar la imagen.'));
+                    }, 'image/jpeg', 0.8);
+                };
+                img.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Sube la foto a Cloud Storage y devuelve su URL pública (privada hasta
+        // compartirla) y la ruta interna, para poder borrarla si hace falta.
+        async function uploadReceiptPhoto(file, sectorId) {
+            if (!firebaseStorage) {
+                throw new Error('Cloud Storage no está disponible. Revisá que hayas activado el plan Blaze y Storage en la consola de Firebase.');
+            }
+            const compressedBlob = await compressReceiptImage(file);
+            const path = `recibos/${sectorId}/${Date.now()}_${crypto.randomUUID()}.jpg`;
+            const ref = firebaseStorage.ref(path);
+            await ref.put(compressedBlob, { contentType: 'image/jpeg' });
+            const url = await ref.getDownloadURL();
+            return { url, path };
+        }
+
+        async function db_createReceipt({ sector_id, sector_name, provider_name, amount, date, photo_file }, userSession) {
+            if (!canManageAccounting(userSession)) {
+                showToast('Acceso denegado', 'Solo el dueño y los administradores pueden cargar boletas.', 'error');
+                return false;
+            }
+            const cleanProvider = (provider_name || '').trim();
+            const cleanAmount = Number(amount);
+            if (!cleanProvider) {
+                showToast('Falta el proveedor', 'Ingresá el nombre del proveedor.', 'warning');
+                return false;
+            }
+            if (!cleanAmount || cleanAmount <= 0) {
+                showToast('Monto inválido', 'Ingresá un monto mayor a cero.', 'warning');
+                return false;
+            }
+            if (!photo_file) {
+                showToast('Falta la foto', 'Sacá o elegí una foto de la boleta.', 'warning');
+                return false;
+            }
+
+            let photoUrl = null, photoPath = null;
+            try {
+                if (isLiveSupabase && firebaseStorage) {
+                    const uploaded = await uploadReceiptPhoto(photo_file, sector_id);
+                    photoUrl = uploaded.url;
+                    photoPath = uploaded.path;
+                } else if (isLiveSupabase && !firebaseStorage) {
+                    // Conectado a Firebase pero Cloud Storage no está disponible todavía
+                    // (falta activar Blaze/Storage, o la consola tardó en propagar el cambio).
+                    // No guardamos la foto como texto gigante en Firestore: se corta acá
+                    // con un aviso claro en vez de arriesgar documentos pesados o rotos.
+                    showToast(
+                        'Cloud Storage no disponible',
+                        'Activá Storage en la consola de Firebase (requiere plan Blaze) y volvé a intentar. La boleta no se guardó.',
+                        'error'
+                    );
+                    return false;
+                } else {
+                    // Modo simulador local: guardamos la foto como data URL (solo para pruebas, no persiste en la nube)
+                    photoUrl = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(photo_file);
+                    });
+                }
+            } catch (e) {
+                console.error('Error al subir la foto de la boleta:', e);
+                showToast('Error al subir la foto', e.message || 'No se pudo subir la foto. Probá de nuevo.', 'error');
+                return false;
+            }
+
+            const row = {
+                id: crypto.randomUUID(),
+                sector_id: sector_id || null,
+                sector_name: sector_name || 'Sin Sector',
+                provider_name: cleanProvider,
+                amount: cleanAmount,
+                date: date || new Date().toISOString().slice(0, 10),
+                photo_url: photoUrl,
+                photo_storage_path: photoPath,
+                uploaded_by_code: userSession.code,
+                uploaded_by_name: userSession.name,
+                created_at: new Date().toISOString()
+            };
+
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient.from('accounting_receipts').insert([row]);
+                if (error) { console.error(error); showToast('Error', 'No se pudo guardar la boleta.', 'error'); return false; }
+                await fetchAndSyncFromSupabase();
+            } else {
+                const db = getMockDb();
+                db.accounting_receipts.push(row);
+                saveMockDb(db);
+            }
+            showToast('Boleta cargada 📸', `${cleanProvider}: ${formatUYU(cleanAmount)}`, 'success');
+            return true;
+        }
+
+        async function db_deleteReceipt(receiptId, userSession) {
+            if (!canManageAccounting(userSession)) {
+                showToast('Acceso denegado', 'No tenés permiso para borrar boletas.', 'error');
+                return false;
+            }
+            const db = getMockDb();
+            const target = db.accounting_receipts.find(r => r.id === receiptId);
+
+            if (isLiveSupabase && supabaseClient) {
+                const { error } = await supabaseClient.from('accounting_receipts').delete().eq('id', receiptId);
+                if (error) { console.error(error); showToast('Error', 'No se pudo borrar la boleta.', 'error'); return false; }
+                if (target && target.photo_storage_path && firebaseStorage) {
+                    try { await firebaseStorage.ref(target.photo_storage_path).delete(); }
+                    catch (e) { console.error('No se pudo borrar la foto de Storage (puede que ya no exista):', e); }
+                }
+                await fetchAndSyncFromSupabase();
+            } else {
+                db.accounting_receipts = db.accounting_receipts.filter(r => r.id !== receiptId);
+                saveMockDb(db);
+            }
+            showToast('Boleta eliminada 🗑️', 'El registro fue borrado.', 'success');
+            return true;
+        }
+
+        // ==========================================
+        // MÓDULO DE CONTABILIDAD — INTERFAZ
+        // ==========================================
+
+        // Lista de proveedores ya usados (para autocompletar y no repetir
+        // "Verdulero Juan" / "verdulero juan" como si fueran dos distintos)
+        function getKnownProviderNames(db) {
+            const names = new Set();
+            db.accounting_receipts.forEach(r => { if (r.provider_name) names.add(r.provider_name); });
+            return [...names].sort((a, b) => a.localeCompare(b));
+        }
+
+        async function openUploadReceiptModal(sectorId) {
+            const userSession = getCurrentAccountingSession();
+            if (!canManageAccounting(userSession)) {
+                showToast('Acceso denegado', 'Solo el dueño y los administradores pueden cargar boletas.', 'error');
+                return;
+            }
+            const db = getMockDb();
+            const knownProviders = getKnownProviderNames(db);
+            receiptUploadPreviewFile = null;
+
+            const sectorOptions = db.sectors.map(s => `<option value="${s.id}" ${s.id === sectorId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+            const sectorSelectHtml = userSession.role === 'owner'
+                ? `
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Sector</label>
+                        <select id="receipt-sector" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none font-semibold">
+                            <option value="" ${!sectorId ? 'selected' : ''}>Sin sector (gasto general)</option>
+                            ${sectorOptions}
+                        </select>
+                    </div>
+                `
+                : `<input type="hidden" id="receipt-sector" value="${sectorId}">`;
+
+            const modal = document.createElement('div');
+            modal.className = "fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-pop-up";
+            modal.id = "dynamic-modal";
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-200 max-h-[92vh] flex flex-col">
+                    <div class="bg-slate-900 text-white p-4 font-bold flex justify-between items-center shrink-0">
+                        <h4 class="text-sm font-serif">📸 Cargar Boleta de Proveedor</h4>
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="text-white hover:text-red-300 font-bold text-lg leading-none">&times;</button>
+                    </div>
+                    <div class="p-4 space-y-3 text-xs overflow-y-auto">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Foto de la Boleta</label>
+                            <input type="file" id="receipt-photo-input" accept="image/*" capture="environment" onchange="handleReceiptPhotoSelected(this)" class="w-full text-[10px] bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                            <div id="receipt-photo-preview" class="mt-2 hidden">
+                                <img id="receipt-photo-preview-img" class="w-full max-h-48 object-contain rounded-xl border border-slate-200 bg-slate-50">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Proveedor</label>
+                            <input type="text" id="receipt-provider" list="receipt-providers-list" placeholder="Ej: Verdulero Juan" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none font-bold">
+                            <datalist id="receipt-providers-list">
+                                ${knownProviders.map(n => `<option value="${escapeHtml(n)}">`).join('')}
+                            </datalist>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Monto ($)</label>
+                            <input type="number" id="receipt-amount" min="0" step="0.01" placeholder="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 outline-none font-mono text-center text-sm font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Fecha</label>
+                            <input type="date" id="receipt-date" value="${new Date().toISOString().slice(0,10)}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none">
+                        </div>
+                        ${sectorSelectHtml}
+                    </div>
+                    <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-end gap-2 text-xs font-bold shrink-0">
+                        <button onclick="document.getElementById('dynamic-modal').remove()" class="bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl">Cancelar</button>
+                        <button id="btn-submit-receipt" class="bg-amber-700 hover:bg-amber-800 text-white px-3.5 py-2 rounded-xl shadow">💾 Guardar Boleta</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById('btn-submit-receipt').onclick = async () => {
+                const btn = document.getElementById('btn-submit-receipt');
+                const sectorField = document.getElementById('receipt-sector');
+                const selectedSectorId = sectorField ? (sectorField.value || null) : null;
+                const sectorObj = db.sectors.find(s => s.id === selectedSectorId);
+
+                if (!receiptUploadPreviewFile) {
+                    showToast('Falta la foto', 'Sacá o elegí una foto de la boleta antes de guardar.', 'warning');
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.textContent = '⏳ Subiendo...';
+
+                const ok = await db_createReceipt({
+                    sector_id: selectedSectorId,
+                    sector_name: sectorObj ? sectorObj.name : 'Sin Sector',
+                    provider_name: document.getElementById('receipt-provider').value,
+                    amount: document.getElementById('receipt-amount').value,
+                    date: document.getElementById('receipt-date').value,
+                    photo_file: receiptUploadPreviewFile
+                }, userSession);
+
+                if (ok) {
+                    receiptUploadPreviewFile = null;
+                    document.getElementById('dynamic-modal').remove();
+                    renderAllScreens();
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '💾 Guardar Boleta';
+                }
+            };
+        }
+
+        function handleReceiptPhotoSelected(inputEl) {
+            const file = inputEl.files && inputEl.files[0];
+            if (!file) { receiptUploadPreviewFile = null; return; }
+            receiptUploadPreviewFile = file;
+            const preview = document.getElementById('receipt-photo-preview');
+            const previewImg = document.getElementById('receipt-photo-preview-img');
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImg.src = e.target.result;
+                preview.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function setAccountingViewMode(mode) {
+            accountingViewMode = mode;
+            expandedAccountingGroups.clear();
+            renderAllScreens();
+        }
+
+        function toggleAccountingGroup(groupId) {
+            if (expandedAccountingGroups.has(groupId)) expandedAccountingGroups.delete(groupId);
+            else expandedAccountingGroups.add(groupId);
+            renderAllScreens();
+        }
+
+        function setAccountingMonthFilter(value) {
+            accountingMonthFilter = value || null;
+            renderAllScreens();
+        }
+
+        function getFilteredReceipts(db) {
+            if (!accountingMonthFilter) return db.accounting_receipts;
+            return db.accounting_receipts.filter(r => (r.date || '').slice(0, 7) === accountingMonthFilter);
+        }
+
+        function getAvailableReceiptMonths(db) {
+            const months = new Set();
+            db.accounting_receipts.forEach(r => { if (r.date) months.add(r.date.slice(0, 7)); });
+            return [...months].sort().reverse();
+        }
+
+        function renderAccountingTab(session, db) {
+            const receipts = getFilteredReceipts(db);
+            const totalGeneral = receipts.reduce((s, r) => s + Number(r.amount), 0);
+            const months = getAvailableReceiptMonths(db);
+
+            let groupsMap = new Map();
+            if (accountingViewMode === 'provider') {
+                receipts.forEach(r => {
+                    const key = r.provider_name || '(Sin proveedor)';
+                    if (!groupsMap.has(key)) groupsMap.set(key, { id: 'prov-' + key, label: key, items: [] });
+                    groupsMap.get(key).items.push(r);
+                });
+            } else {
+                receipts.forEach(r => {
+                    const key = r.sector_name || 'Sin Sector';
+                    if (!groupsMap.has(key)) groupsMap.set(key, { id: 'sec-' + key, label: key, items: [] });
+                    groupsMap.get(key).items.push(r);
+                });
+            }
+            const groups = [...groupsMap.values()]
+                .map(g => ({ ...g, total: g.items.reduce((s, r) => s + Number(r.amount), 0) }))
+                .sort((a, b) => b.total - a.total);
+
+            let html = `
+                <div class="bg-gradient-to-r from-amber-700 to-amber-800 text-white rounded-2xl p-4 shadow-md flex justify-between items-center">
+                    <div>
+                        <span class="text-[9px] uppercase font-bold text-amber-100 block">Total ${accountingMonthFilter ? 'del Período' : 'General'}</span>
+                        <span class="text-2xl font-extrabold">${formatUYU(totalGeneral)}</span>
+                        <span class="text-[9px] text-amber-100 block">${receipts.length} boleta${receipts.length === 1 ? '' : 's'}</span>
+                    </div>
+                    <span class="text-4xl opacity-80">🧾</span>
+                </div>
+
+                <div class="flex flex-wrap gap-2 items-center justify-between">
+                    <div class="flex bg-slate-100 rounded-xl p-1 text-[10px] font-bold">
+                        <button onclick="setAccountingViewMode('provider')" class="px-3 py-1.5 rounded-lg transition ${accountingViewMode === 'provider' ? 'bg-white shadow text-amber-800' : 'text-slate-500'}">Por Proveedor</button>
+                        <button onclick="setAccountingViewMode('sector')" class="px-3 py-1.5 rounded-lg transition ${accountingViewMode === 'sector' ? 'bg-white shadow text-amber-800' : 'text-slate-500'}">Por Sector</button>
+                    </div>
+                    <div class="flex gap-1.5 items-center">
+                        <select onchange="setAccountingMonthFilter(this.value)" class="bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none">
+                            <option value="">Todo el historial</option>
+                            ${months.map(m => `<option value="${m}" ${accountingMonthFilter === m ? 'selected' : ''}>${formatMonthLabel(m)}</option>`).join('')}
+                        </select>
+                        <button onclick="exportAccountingToExcel()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg transition whitespace-nowrap">📥 Excel</button>
+                    </div>
+                </div>
+
+                <button onclick="openUploadReceiptModal(null)" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-3 rounded-xl shadow-md transition">
+                    📸 Cargar Boleta
+                </button>
+
+                <div class="space-y-2">
+            `;
+
+            if (groups.length === 0) {
+                html += `<div class="p-6 text-center text-slate-400 italic bg-white border border-slate-200 rounded-xl">Todavía no hay boletas cargadas${accountingMonthFilter ? ' en este período' : ''}.</div>`;
+            }
+
+            groups.forEach(group => {
+                const isOpen = expandedAccountingGroups.has(group.id);
+                html += `
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                        <button onclick="toggleAccountingGroup('${group.id}')" class="w-full flex justify-between items-center p-3 text-left hover:bg-slate-50 transition">
+                            <div>
+                                <p class="font-extrabold text-sm text-slate-800">${escapeHtml(group.label)}</p>
+                                <p class="text-[9px] text-slate-500">${group.items.length} boleta${group.items.length === 1 ? '' : 's'}</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-extrabold text-amber-800">${formatUYU(group.total)}</span>
+                                <span class="text-slate-400 text-xs">${isOpen ? '▲' : '▼'}</span>
+                            </div>
+                        </button>
+                        ${isOpen ? `
+                        <div class="border-t border-slate-100 divide-y divide-slate-100">
+                            ${group.items.sort((a,b) => new Date(b.date) - new Date(a.date)).map(r => `
+                                <div class="p-3 flex gap-3 items-center">
+                                    <a href="${r.photo_url}" target="_blank" rel="noopener">
+                                        <img src="${r.photo_url}" class="w-14 h-14 object-cover rounded-lg border border-slate-200 shrink-0" loading="lazy">
+                                    </a>
+                                    <div class="flex-grow min-w-0">
+                                        <p class="font-bold text-slate-800 text-[11px] truncate">${accountingViewMode === 'provider' ? escapeHtml(r.sector_name || 'Sin Sector') : escapeHtml(r.provider_name || '(Sin proveedor)')}</p>
+                                        <p class="text-[9px] text-slate-400">${r.date} · Cargó: ${escapeHtml(r.uploaded_by_name || '-')}</p>
+                                    </div>
+                                    <div class="text-right shrink-0">
+                                        <p class="font-extrabold text-slate-800">${formatUYU(r.amount)}</p>
+                                        <button onclick="submitDeleteReceipt('${r.id}')" class="text-red-500 hover:text-red-700 font-bold text-[9px]">🗑️ Borrar</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+
+            html += `</div>`;
+            return html;
+        }
+
+        function formatMonthLabel(yyyyMm) {
+            const [y, m] = yyyyMm.split('-');
+            const names = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+            return `${names[Number(m) - 1]} ${y}`;
+        }
+
+        async function submitDeleteReceipt(receiptId) {
+            if (!confirm('¿Borrar esta boleta? La foto también se eliminará de forma permanente.')) return;
+            const ok = await db_deleteReceipt(receiptId, getCurrentAccountingSession());
+            if (ok) renderAllScreens();
+        }
+
+        function exportAccountingToExcel() {
+            const db = getMockDb();
+            const receipts = getFilteredReceipts(db);
+            const rows = receipts
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .map(r => ({
+                    "Fecha": r.date,
+                    "Proveedor": r.provider_name,
+                    "Sector": r.sector_name || 'Sin Sector',
+                    "Monto": r.amount,
+                    "Cargado por": r.uploaded_by_name || '',
+                    "Link Foto": r.photo_url || ''
+                }));
+
+            const byProvider = {};
+            const bySector = {};
+            receipts.forEach(r => {
+                byProvider[r.provider_name] = (byProvider[r.provider_name] || 0) + Number(r.amount);
+                const sec = r.sector_name || 'Sin Sector';
+                bySector[sec] = (bySector[sec] || 0) + Number(r.amount);
+            });
+            const providerRows = Object.entries(byProvider).sort((a,b) => b[1]-a[1]).map(([k,v]) => ({ "Proveedor": k, "Total": v }));
+            const sectorRows = Object.entries(bySector).sort((a,b) => b[1]-a[1]).map(([k,v]) => ({ "Sector": k, "Total": v }));
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Boletas");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(providerRows), "Total por Proveedor");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sectorRows), "Total por Sector");
+
+            const suffix = accountingMonthFilter ? `_${accountingMonthFilter}` : '';
+            XLSX.writeFile(wb, `Contabilidad${suffix}_${systemSettings.app_name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
+            showToast("📥 Excel Descargado", "Planilla de Contabilidad descargada con éxito.", "success");
+        }
+
+
+        // ==========================================
         // MÓDULO DE EMPLEADOS — INTERFAZ
         // ==========================================
 
@@ -2516,6 +3001,9 @@
                     <button onclick="setTab('owner', 'employees')" class="py-2.5 ${tab === 'employees' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
                         👷 Empleados
                     </button>
+                    <button onclick="setTab('owner', 'accounting')" class="py-2.5 ${tab === 'accounting' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
+                        🧾 Contabilidad
+                    </button>
                     <button onclick="setTab('owner', 'config')" class="py-2.5 ${tab === 'config' ? 'border-b-2 border-[#198754] text-[#0d3a22]' : 'text-slate-500 hover:text-slate-800'}">
                         ⚙️ Configuración No-Code
                     </button>
@@ -2526,6 +3014,10 @@
 
             if (tab === 'employees') {
                 html += renderEmployeesTab(session, db);
+            }
+
+            if (tab === 'accounting') {
+                html += renderAccountingTab(session, db);
             }
 
             if (tab === 'inventory') {
@@ -2563,6 +3055,9 @@
                         </div>
                         <button onclick="openAddMerchModal('owner')" class="bg-[#198754] hover:bg-emerald-600 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-sm shrink-0 transition">
                             ➕ Alta de Artículo
+                        </button>
+                        <button onclick="openUploadReceiptModal(ownerSelectedSectorFilter !== 'all' ? ownerSelectedSectorFilter : null)" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-sm shrink-0 transition">
+                            📸 Cargar Boleta
                         </button>
                     </div>
 
@@ -2961,6 +3456,9 @@
 
                     <button onclick="openAddMerchModal('admin')" class="w-full bg-[#198754] hover:bg-emerald-600 text-white font-bold text-xs py-2 rounded-xl flex items-center justify-center gap-1 transition shadow-sm select-none">
                         ➕ Alta de Mercadería
+                    </button>
+                    <button onclick="openUploadReceiptModal('${session.sector_id}')" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-2 rounded-xl flex items-center justify-center gap-1 transition shadow-sm select-none">
+                        📸 Cargar Boleta de Proveedor
                     </button>
 
                     <div class="space-y-2">
