@@ -325,8 +325,9 @@
             const timeoutHours = Number(systemSettings.session_timeout_hours);
             if (!timeoutHours || timeoutHours <= 0) return; // 0 = desactivado
 
-            const anySessionActive = activeSessions.owner || activeSessions.admin || activeSessions.staff || activeSessions.fullscreen;
-            if (!anySessionActive) return;
+            // Solo "fullscreen" es una sesión real (ver nota en getCurrentAccountingSession);
+            // si no hay nadie realmente logueado, no hay nada para cerrar por inactividad.
+            if (!activeSessions.fullscreen) return;
 
             const inactiveMs = Date.now() - lastActivityAt;
             if (inactiveMs >= timeoutHours * 60 * 60 * 1000) {
