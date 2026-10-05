@@ -1880,9 +1880,13 @@
         }
 
         function getCurrentAccountingSession() {
+            // El login real de la app pasa por "fullscreen"; activeSessions.owner/admin
+            // son datos de demostración que quedan siempre cargados (código viejo de
+            // pantallas que ya no se usan) y NO representan a quien está logueado
+            // de verdad, así que se consultan solo como respaldo si no hay sesión real.
+            if (activeSessions.fullscreen && canManageAccounting(activeSessions.fullscreen)) return activeSessions.fullscreen;
             if (activeSessions.owner) return activeSessions.owner;
             if (activeSessions.admin && canManageAccounting(activeSessions.admin)) return activeSessions.admin;
-            if (activeSessions.fullscreen && canManageAccounting(activeSessions.fullscreen)) return activeSessions.fullscreen;
             return null;
         }
 
@@ -2521,9 +2525,12 @@
 
         // Devuelve la sesión activa que esté gestionando Empleados (dueño o admin autorizado)
         function getCurrentOwnerOrAdminSession() {
+            // Mismo criterio que getCurrentAccountingSession(): el login real es
+            // "fullscreen"; owner/admin acá son datos de demostración de pantallas
+            // viejas sin uso y solo se consultan como respaldo.
+            if (activeSessions.fullscreen && canManageEmployees(activeSessions.fullscreen)) return activeSessions.fullscreen;
             if (activeSessions.owner) return activeSessions.owner;
             if (activeSessions.admin && canManageEmployees(activeSessions.admin)) return activeSessions.admin;
-            if (activeSessions.fullscreen && canManageEmployees(activeSessions.fullscreen)) return activeSessions.fullscreen;
             return null;
         }
 
@@ -4436,7 +4443,12 @@
         }
 
         async function deleteHistoryLog(historyId) {
-            const owner = activeSessions.fullscreen?.role === 'owner' || activeSessions.owner?.role === 'owner';
+            // Igual que en getCurrentAccountingSession(): se prioriza la sesión real
+            // ("fullscreen"); activeSessions.owner es un dato de demostración que
+            // queda siempre cargado y no debe habilitar nada por sí solo.
+            const owner = activeSessions.fullscreen
+                ? activeSessions.fullscreen.role === 'owner'
+                : activeSessions.owner?.role === 'owner';
             if (!owner) return;
             if (!confirm('¿Borrar únicamente este registro de auditoría? El inventario no será modificado.')) return;
             const deleted = await db_deleteHistoryLog(historyId);
